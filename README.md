@@ -355,17 +355,6 @@ CREATE TABLE AlertHistory (
 
 ---
 
-## 👨‍💻 Team
-
-| Name | Roll No | Contribution |
-|---|---|---|
-| **Zaid Patel** | 230434 | SMS functionality, SosEngine, LocationHelper, Contacts module (AddContactActivity, ViewContactsActivity, ContactAdapter, DatabaseHelper) |
-| **Dilbar Shaikh** | — | UI/UX design, XML layouts for all screens, drawable icon assets |
-| **Nauman Shaikh** | — | Safety Guide module, SafetyCategoryAdapter, Alert History feature |
-| **Hasnain Shaikh** | — | HomeActivity, ShakeDetector, SplashActivity, testing & debugging |
-
----
-
 ## 🏫 Project Info
 
 | Detail | Value |
