@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="bg">#000000</color>
+    <color name="card">#1C1C1E</color>
+
+    <color name="red">#FF3B30</color>
+    <color name="red_dark">#B00020</color>
+
+    <color name="green">#30D158</color>
+    <color name="text_primary">#FFFFFF</color>
+    <color name="text_secondary">#A1A1A1</color>
+
+    <color name="chip_selected">#FF3B30</color>
+    <color name="chip_unselected">#2A2A2C</color>
+</resources>

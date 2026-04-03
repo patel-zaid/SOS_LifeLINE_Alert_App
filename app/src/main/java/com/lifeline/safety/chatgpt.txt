@@ -1,0 +1,3622 @@
+app/manifests/AndroidManifest.xml:
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
+
+    <uses-feature
+        android:name="android.hardware.telephony"
+        android:required="false" />
+    <uses-feature
+        android:name="android.hardware.camera"
+        android:required="false" />
+
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+    <uses-permission android:name="android.permission.SEND_SMS" />
+    <uses-permission android:name="android.permission.VIBRATE" />
+    <uses-permission android:name="android.permission.READ_CONTACTS" />
+    <uses-permission android:name="android.permission.CAMERA" />
+    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" />
+
+    <application
+        android:allowBackup="false"
+        android:icon="@mipmap/ic_launcher"
+        android:label="@string/app_name"
+        android:roundIcon="@mipmap/ic_launcher_round"
+        android:supportsRtl="true"
+        android:theme="@style/Theme.LIFELINE">
+        <activity
+            android:name=".activities.SafetyDetailActivity"
+            android:exported="false" />
+        <activity
+            android:name=".activities.SafetyGuideActivity"
+            android:exported="false" />
+        <activity
+            android:name=".activities.AlertHistoryActivity"
+            android:exported="false" />
+        <activity
+            android:name=".activities.ViewContactsActivity"
+            android:exported="false" />
+        <activity
+            android:name=".activities.AddContactActivity"
+            android:exported="false" />
+        <activity
+            android:name=".activities.HomeActivity"
+            android:exported="true" />
+        <activity
+            android:name=".activities.MainActivity"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+    </application>
+</manifest>
+
+
+app/java/com.lifeline.safety/activities/AddContactActivity.java:
+package com.lifeline.safety.activities;
+
+import android.Manifest;
+import android.content.Intent;
+import android.content.pm.PackageManager;
+import android.net.Uri;
+import android.os.Bundle;
+import android.provider.ContactsContract;
+import android.widget.*;
+
+import androidx.activity.result.ActivityResultLauncher;
+import androidx.activity.result.contract.ActivityResultContracts;
+import androidx.appcompat.app.AppCompatActivity;
+import androidx.core.app.ActivityCompat;
+import androidx.core.content.ContextCompat;
+
+import com.google.android.material.button.MaterialButton;
+import com.google.android.material.textfield.TextInputEditText;
+import com.lifeline.safety.db.DatabaseHelper;
+import com.lifeline.safety.R;
+
+public class AddContactActivity extends AppCompatActivity {
+
+    private static final int PERMISSION_READ_CONTACTS = 100;
+    private MaterialButton btnImportContacts, btnSaveContact;
+    private ImageView btnBack;
+    private TextInputEditText etFullName, etPhoneNumber;
+    private DatabaseHelper db;
+    private ActivityResultLauncher<Intent> pickContactLauncher;
+
+    @Override
+    protected void onCreate(Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+        setContentView(R.layout.activity_add_contact);
+
+        initializeViews();
+        setupDatabase();
+        setupActivityLaunchers();
+        setupClickListeners();
+    }
+    private void initializeViews() {
+        btnBack = findViewById(R.id.btnBack);
+        btnImportContacts = findViewById(R.id.btnImportContacts);
+        etFullName = findViewById(R.id.etFullName);
+        etPhoneNumber = findViewById(R.id.etPhoneNumber);
+        btnSaveContact = findViewById(R.id.btnSaveContact);
+    }
+    private void setupDatabase() {
+        db = new DatabaseHelper(this);
+    }
+    private void setupActivityLaunchers() {
+        pickContactLauncher = registerForActivityResult(
+                new ActivityResultContracts.StartActivityForResult(),
+                result -> {
+                    if (result.getResultCode() == RESULT_OK && result.getData() != null) {
+                        Uri contactUri = result.getData().getData();
+                        handleContactSelection(contactUri);
+                    }
+                }
+        );
+    }
+    private void setupClickListeners() {
+        btnBack.setOnClickListener(v -> finish());
+        btnImportContacts.setOnClickListener(v -> importFromContacts());
+        btnSaveContact.setOnClickListener(v -> saveContact());
+    }
+    private void importFromContacts() {
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.READ_CONTACTS)
+                != PackageManager.PERMISSION_GRANTED) {
+            ActivityCompat.requestPermissions(this,
+                    new String[]{Manifest.permission.READ_CONTACTS}, PERMISSION_READ_CONTACTS);
+        } else {
+            Intent pickContactIntent = new Intent(Intent.ACTION_PICK,
+                    ContactsContract.Contacts.CONTENT_URI);
+            pickContactLauncher.launch(pickContactIntent);
+        }
+    }
+    private void handleContactSelection(Uri contactUri) {
+        try {
+            android.database.Cursor cursor = getContentResolver().query(contactUri,
+                    null, null, null, null);
+
+            if (cursor != null && cursor.moveToFirst()) {
+                int nameIndex = cursor.getColumnIndex(ContactsContract.Contacts.DISPLAY_NAME);
+                int idIndex = cursor.getColumnIndex(ContactsContract.Contacts._ID);
+
+                String name = cursor.getString(nameIndex);
+                String contactId = cursor.getString(idIndex);
+
+                etFullName.setText(name);
+
+                // Get phone number
+                android.database.Cursor phoneCursor = getContentResolver().query(
+                        ContactsContract.CommonDataKinds.Phone.CONTENT_URI,
+                        null,
+                        ContactsContract.CommonDataKinds.Phone.CONTACT_ID + " = ?",
+                        new String[]{contactId},
+                        null);
+
+                if (phoneCursor != null && phoneCursor.moveToFirst()) {
+                    int phoneIndex = phoneCursor.getColumnIndex(
+                            ContactsContract.CommonDataKinds.Phone.NUMBER);
+                    String phoneNumber = phoneCursor.getString(phoneIndex);
+                    etPhoneNumber.setText(phoneNumber);
+                    phoneCursor.close();
+                }
+
+                cursor.close();
+            }
+        } catch (Exception e) {
+            Toast.makeText(this, "Error importing contact", Toast.LENGTH_SHORT).show();
+            e.printStackTrace();
+        }
+    }
+    private void saveContact() {
+        String name = etFullName.getText().toString().trim();
+        String phone = etPhoneNumber.getText().toString().trim();
+
+        // Validate name
+        if (name.isEmpty()) {
+            etFullName.setError("Full name is required");
+            etFullName.requestFocus();
+            return;
+        }
+
+        // Validate phone number
+        if (phone.isEmpty()) {
+            etPhoneNumber.setError("Phone number is required");
+            etPhoneNumber.requestFocus();
+            return;
+        }
+
+        // Remove spaces and special characters for validation
+        String cleanPhone = phone.replaceAll("[\\s\\-\\(\\)\\+]", "");
+        if (!cleanPhone.matches("\\d{10,13}")) {
+            etPhoneNumber.setError("Enter a valid phone number (10-13 digits)");
+            etPhoneNumber.requestFocus();
+            return;
+        }
+
+        // Save to database
+        boolean inserted = db.insertContact(name, phone);
+
+        if (inserted) {
+            Toast.makeText(this, "Contact saved successfully", Toast.LENGTH_SHORT).show();
+            finish();
+        } else {
+            Toast.makeText(this, "Error saving contact. Please try again.", Toast.LENGTH_SHORT).show();
+        }
+    }
+    @Override
+    public void onRequestPermissionsResult(int requestCode, String[] permissions,
+                                           int[] grantResults) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults);
+
+        if (requestCode == PERMISSION_READ_CONTACTS) {
+            if (grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
+                importFromContacts();
+            } else {
+                Toast.makeText(this, "Permission denied to read contacts", Toast.LENGTH_SHORT).show();
+            }
+        }
+    }
+}
+
+
+app/java/com.lifeline.safety/activities/AlertHistoryActivity.java:
+package com.lifeline.safety.activities;
+
+import android.os.Bundle;
+import android.view.View;
+import android.widget.*;
+import androidx.appcompat.app.AppCompatActivity;
+import androidx.recyclerview.widget.*;
+import com.lifeline.safety.R;
+import com.lifeline.safety.adapters.AlertHistoryAdapter;
+import com.lifeline.safety.db.DatabaseHelper;
+
+public class AlertHistoryActivity extends AppCompatActivity {
+
+    @Override
+    protected void onCreate(Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+        setContentView(R.layout.activity_alert_history);
+
+        // Initialize views
+        ImageView backButton = findViewById(R.id.backButton);
+        RecyclerView rv = findViewById(R.id.recyclerHistory);
+        TextView empty = findViewById(R.id.tvEmpty);
+
+        // Filter tabs
+        TextView filterAll = findViewById(R.id.filterAll);
+        TextView filterResolved = findViewById(R.id.filterResolved);
+        TextView filterActive = findViewById(R.id.filterActive);
+
+        // Bottom navigation
+        LinearLayout navHome = findViewById(R.id.navHome);
+        LinearLayout navHistory = findViewById(R.id.navHistory);
+        RelativeLayout navSOS = findViewById(R.id.navSOS);
+        LinearLayout navContacts = findViewById(R.id.navContacts);
+        LinearLayout navSettings = findViewById(R.id.navSettings);
+
+        // Back button click
+        backButton.setOnClickListener(v -> finish());
+
+        // Load data
+        DatabaseHelper db = new DatabaseHelper(this);
+        var history = db.getAllAlertHistory();
+
+        if(history.isEmpty()){
+            empty.setVisibility(View.VISIBLE);
+            rv.setVisibility(View.GONE);
+        } else {
+            rv.setLayoutManager(new LinearLayoutManager(this));
+            rv.setHasFixedSize(true);
+            rv.setAdapter(new AlertHistoryAdapter(history));
+        }
+
+        // Filter tab clicks (you can implement filtering logic later)
+        filterAll.setOnClickListener(v -> {
+            // Update UI and filter
+            updateFilterTabs(filterAll, filterResolved, filterActive);
+            // TODO: Filter and update adapter
+        });
+
+        filterResolved.setOnClickListener(v -> {
+            updateFilterTabs(filterResolved, filterAll, filterActive);
+            // TODO: Filter and update adapter
+        });
+
+        filterActive.setOnClickListener(v -> {
+            updateFilterTabs(filterActive, filterAll, filterResolved);
+            // TODO: Filter and update adapter
+        });
+
+        // Bottom navigation clicks
+        navHome.setOnClickListener(v -> {
+            // Navigate to Home
+            finish(); // Or start HomeActivity
+        });
+
+        navHistory.setOnClickListener(v -> {
+            // Already on History
+        });
+
+        navSOS.setOnClickListener(v -> {
+            // Trigger SOS or navigate to SOS screen
+        });
+
+        navContacts.setOnClickListener(v -> {
+            // Navigate to Contacts
+        });
+
+        navSettings.setOnClickListener(v -> {
+            // Navigate to Settings
+        });
+    }
+
+    private void updateFilterTabs(TextView selected, TextView... others) {
+        // Update selected tab
+        selected.setBackgroundResource(R.drawable.tab_selected_bg);
+        selected.setTextColor(getResources().getColor(android.R.color.white, null));
+
+        // Update other tabs
+        for (TextView other : others) {
+            other.setBackgroundResource(R.drawable.tab_unselected_bg);
+            other.setTextColor(getResources().getColor(R.color.light_home_text, null));
+        }
+    }
+}
+
+
+app/java/com.lifeline.safety/activities/HomeActivity.java:
+package com.lifeline.safety.activities;
+
+import android.os.Bundle;
+import android.content.Intent;
+import android.os.CountDownTimer;
+import android.os.Handler;
+import android.os.Looper;
+import android.os.VibratorManager;
+import android.view.HapticFeedbackConstants;
+import android.view.View;
+import android.widget.*;
+import android.os.VibrationEffect;
+import android.os.Vibrator;
+
+import androidx.annotation.NonNull;
+import androidx.appcompat.app.AlertDialog;
+import androidx.appcompat.app.AppCompatActivity;
+import androidx.appcompat.widget.SwitchCompat;
+import androidx.cardview.widget.CardView;
+import androidx.core.view.WindowCompat;
+
+import com.lifeline.safety.R;
+import com.lifeline.safety.utils.CooldownManager;
+import com.lifeline.safety.utils.PermissionManager;
+import com.lifeline.safety.utils.ShakeDetector;
+import com.lifeline.safety.utils.SosEngine;
+
+import java.util.Objects;
+
+public class HomeActivity extends AppCompatActivity {
+
+    // UI Components
+    private RelativeLayout sosButton;
+    private CardView contactsCard, historyCard, safetyGuideCard, shakeToggleCard;
+    private ImageView settingsIcon;
+    private SwitchCompat shakeToggle;
+
+    // Shake Detection
+    private ShakeDetector shakeDetector;
+    private boolean shakeEnabled = false;
+
+    // SOS State
+    private boolean sosArmed = false;
+    private CountDownTimer sosCountdown;
+    private AlertDialog countdownDialog;
+
+    private static final int COUNTDOWN_SECONDS = 5;
+
+    @Override
+    protected void onCreate(Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+        WindowCompat.setDecorFitsSystemWindows(getWindow(), true);
+        setContentView(R.layout.activity_home);
+
+        initializeViews();
+        setupShakeDetection();
+        setupClickListeners();
+    }
+
+    private void initializeViews() {
+        // Main SOS Button
+        sosButton = findViewById(R.id.sosButton);
+
+        // Navigation Cards
+        contactsCard = findViewById(R.id.contactsCard);
+        historyCard = findViewById(R.id.historyCard);
+        safetyGuideCard = findViewById(R.id.safetyGuideCard);
+
+        // Shake Toggle Card
+        shakeToggleCard = findViewById(R.id.shakeToggleCard);
+        shakeToggle = findViewById(R.id.shakeToggle);
+
+        // Settings Icon
+        settingsIcon = findViewById(R.id.settingsIcon);
+    }
+
+    private void setupShakeDetection() {
+        // Load saved shake preference
+        shakeEnabled = isShakeEnabled();
+        shakeToggle.setChecked(shakeEnabled);
+
+        // Initialize shake detector
+        shakeDetector = new ShakeDetector(this, () -> runOnUiThread(() -> {
+            if (!sosArmed
+                    && shakeEnabled
+                    && !CooldownManager.isCoolingDown()
+                    && PermissionManager.hasSOSPermissions(this)) {
+
+                vibrateWarning();
+                sosArmed = true;
+
+                new Handler(Looper.getMainLooper()).postDelayed(this::vibrateWarning, 100);
+
+                triggerSOS();
+            }
+        }));
+
+        // Setup shake toggle listener
+        shakeToggle.setOnCheckedChangeListener((buttonView, isChecked) -> {
+            shakeEnabled = isChecked;
+
+            // Save preference
+            getSharedPreferences("lifeline_prefs", MODE_PRIVATE)
+                    .edit()
+                    .putBoolean("shake_sos", isChecked)
+                    .apply();
+
+            // Start/Stop shake detector
+            if (isChecked) {
+                shakeDetector.start();
+                Toast.makeText(this, "Shake-to-SOS enabled", Toast.LENGTH_SHORT).show();
+            } else {
+                shakeDetector.stop();
+                Toast.makeText(this, "Shake-to-SOS disabled", Toast.LENGTH_SHORT).show();
+            }
+        });
+    }
+
+    private void setupClickListeners() {
+        // SOS Button Click (Tap)
+        sosButton.setOnClickListener(v -> handleSOSClick());
+
+        // SOS Button Long Press (Alternative trigger)
+        sosButton.setOnLongClickListener(v -> {
+            if (!sosArmed
+                    && !CooldownManager.isCoolingDown()
+                    && PermissionManager.hasSOSPermissions(this)) {
+
+                sosButton.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS);
+                sosArmed = true;
+                triggerSOS();
+            }
+            return true;
+        });
+
+        // Navigation Cards
+        contactsCard.setOnClickListener(v ->
+                startActivity(new Intent(this, ViewContactsActivity.class))
+        );
+
+        historyCard.setOnClickListener(v ->
+                startActivity(new Intent(this, AlertHistoryActivity.class))
+        );
+
+        safetyGuideCard.setOnClickListener(v ->
+                startActivity(new Intent(this, SafetyGuideActivity.class))
+        );
+
+        // Settings Icon
+        settingsIcon.setOnClickListener(v -> {
+            // Open settings activity or show settings dialog
+            Toast.makeText(this, "Settings coming soon", Toast.LENGTH_SHORT).show();
+            // startActivity(new Intent(this, SettingsActivity.class));
+        });
+    }
+
+    @Override
+    protected void onResume() {
+        super.onResume();
+        shakeEnabled = isShakeEnabled();
+        if (shakeEnabled && shakeDetector != null && PermissionManager.hasSOSPermissions(this)) {
+            shakeDetector.start();
+        }
+    }
+
+    @Override
+    protected void onPause() {
+        super.onPause();
+        if (shakeDetector != null) {
+            shakeDetector.stop();
+        }
+        cleanupCountdown();
+    }
+
+    /**
+     * Handle SOS button tap
+     */
+    private void handleSOSClick() {
+        if (sosArmed) return;
+
+        sosArmed = true;
+        sosButton.setAlpha(0.85f);
+        sosButton.setEnabled(false);
+        sosButton.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS);
+
+        if (PermissionManager.hasSOSPermissions(this)) {
+            startSOSCountdown();
+        } else if (PermissionManager.shouldShowRationale(this)) {
+            resetSOSUI();
+            PermissionManager.showRationaleDialog(this);
+        } else {
+            resetSOSUI();
+            PermissionManager.requestSOSPermissions(this);
+        }
+    }
+
+    /**
+     * Handle permission results
+     */
+    @Override
+    public void onRequestPermissionsResult(
+            int requestCode,
+            @NonNull String[] permissions,
+            @NonNull int[] grantResults
+    ) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults);
+
+        if (requestCode == PermissionManager.SOS_PERMISSION_CODE) {
+
+            if (PermissionManager.hasSOSPermissions(this)) {
+                if (shakeEnabled && shakeDetector != null) {
+                    shakeDetector.start();
+                }
+                triggerSOS();
+                return;
+            }
+
+            resetSOSUI();
+
+            if (!PermissionManager.shouldShowRationale(this)) {
+                PermissionManager.showSettingsDialog(this);
+            } else {
+                Toast.makeText(
+                        this,
+                        "Location and SMS permissions are required for SOS",
+                        Toast.LENGTH_LONG
+                ).show();
+            }
+        }
+    }
+
+    /**
+     * Start SOS countdown dialog
+     */
+    private void startSOSCountdown() {
+        if (sosCountdown != null) return;
+
+        View dialogView = getLayoutInflater()
+                .inflate(R.layout.dialog_sos_countdown, null);
+
+        TextView tvCountdown = dialogView.findViewById(R.id.tvCountdown);
+        Button btnCancel = dialogView.findViewById(R.id.btnCancel);
+
+        countdownDialog = new AlertDialog.Builder(this)
+                .setView(dialogView)
+                .setCancelable(false)
+                .create();
+
+        countdownDialog.show();
+
+        Objects.requireNonNull(countdownDialog.getWindow())
+                .getAttributes().windowAnimations = android.R.style.Animation_Dialog;
+
+        sosCountdown = new CountDownTimer(
+                COUNTDOWN_SECONDS * 1000L,
+                1000
+        ) {
+            int secondsLeft = COUNTDOWN_SECONDS;
+
+            @Override
+            public void onTick(long millisUntilFinished) {
+                tvCountdown.setText(String.valueOf(secondsLeft));
+                secondsLeft--;
+            }
+
+            @Override
+            public void onFinish() {
+                cleanupCountdown();
+                triggerSOS();
+            }
+        }.start();
+
+        btnCancel.setOnClickListener(v -> {
+            cleanupCountdown();
+            resetSOSUI();
+            Toast.makeText(this, "SOS cancelled", Toast.LENGTH_SHORT).show();
+        });
+    }
+
+    /**
+     * Trigger actual SOS alert
+     */
+    private void triggerSOS() {
+        CooldownManager.markTriggered();
+
+        SosEngine sosEngine = new SosEngine(this);
+
+        sosEngine.triggerSOS(new SosEngine.SosCallback() {
+
+            @Override
+            public void onStarted() {
+                Toast.makeText(
+                        HomeActivity.this,
+                        "🚨 SOS activated...",
+                        Toast.LENGTH_SHORT
+                ).show();
+            }
+
+            @Override
+            public void onCompleted() {
+                resetSOSUI();
+                Toast.makeText(
+                        HomeActivity.this,
+                        "SOS alert sent successfully",
+                        Toast.LENGTH_LONG
+                ).show();
+            }
+
+            @Override
+            public void onFailed(String reason) {
+                resetSOSUI();
+                Toast.makeText(
+                        HomeActivity.this,
+                        reason,
+                        Toast.LENGTH_LONG
+                ).show();
+            }
+        });
+    }
+
+    /**
+     * Cleanup countdown dialog and timer
+     */
+    private void cleanupCountdown() {
+        if (sosCountdown != null) {
+            sosCountdown.cancel();
+            sosCountdown = null;
+        }
+        if (countdownDialog != null && countdownDialog.isShowing()) {
+            countdownDialog.dismiss();
+            countdownDialog = null;
+        }
+        resetSOSUI();
+    }
+
+    /**
+     * Vibrate for warning
+     */
+    private void vibrateWarning() {
+        try {
+            long[] pattern = new long[]{
+                    0,    // start immediately
+                    800,  // vibrate 800ms
+                    200,  // pause 200ms
+                    800,  // vibrate again
+                    200,
+                    1200  // final long vibration
+            };
+            int[] amplitudes = new int[]{
+                    0,
+                    255,  // MAX strength
+                    0,
+                    255,
+                    0,
+                    255
+            };
+
+            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S) {
+                VibratorManager vm =
+                        (VibratorManager) getSystemService(VIBRATOR_MANAGER_SERVICE);
+
+                if (vm != null) {
+                    vm.getDefaultVibrator().vibrate(
+                            VibrationEffect.createWaveform(pattern, amplitudes, -1)
+                    );
+                }
+            } else {
+                Vibrator v = (Vibrator) getSystemService(VIBRATOR_SERVICE);
+                if (v != null && v.hasVibrator()) {
+                    v.vibrate(
+                            VibrationEffect.createWaveform(pattern, amplitudes, -1)
+                    );
+                }
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+    }
+
+
+
+    /**
+     * Reset SOS UI to default state
+     */
+    private void resetSOSUI() {
+        sosArmed = false;
+        sosButton.setAlpha(1f);
+        sosButton.setEnabled(true);
+    }
+
+    /**
+     * Check if shake detection is enabled
+     */
+    private boolean isShakeEnabled() {
+        return getSharedPreferences("lifeline_prefs", MODE_PRIVATE)
+                .getBoolean("shake_sos", false);
+    }
+
+    @Override
+    protected void onDestroy() {
+        super.onDestroy();
+        if (shakeDetector != null) {
+            shakeDetector.stop();
+        }
+        cleanupCountdown();
+    }
+}
+
+
+app/java/com.lifeline.safety/activities/MainActivity.java:
+package com.lifeline.safety.activities;
+
+import android.content.Intent;
+import android.os.Bundle;
+import androidx.appcompat.app.AppCompatActivity;
+import android.widget.*;
+
+import com.lifeline.safety.R;
+
+
+public class MainActivity extends AppCompatActivity {
+    TextView titleText;
+    Button btnStart;
+
+    @Override
+    protected void onCreate(Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+        setContentView(R.layout.activity_main);
+        titleText = findViewById(R.id.titleText);
+        btnStart = findViewById(R.id.btnStart);
+        btnStart.setOnClickListener(v -> {
+            Intent intent = new Intent(MainActivity.this, HomeActivity.class);
+            intent.putExtra("username", "Asif");
+            startActivity(intent);
+            finish();
+        });
+    }
+}
+
+
+app/java/com.lifeline.safety/activities/SafetyDetailActivity.java:
+package com.lifeline.safety.activities;
+
+import android.os.Bundle;
+import androidx.appcompat.app.AppCompatActivity;
+import android.widget.TextView;
+import com.lifeline.safety.R;
+
+public class SafetyDetailActivity extends AppCompatActivity {
+
+    @Override
+    protected void onCreate(Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+        setContentView(R.layout.activity_safety_detail);
+
+        TextView tvTitle = findViewById(R.id.tvTitle);
+        TextView tvContent = findViewById(R.id.tvContent);
+
+        String category = getIntent().getStringExtra("category");
+        tvTitle.setText(category);
+
+        if (category == null) {
+            finish();
+            return;
+        }
+        tvContent.setText(getContent(category));
+
+    }
+
+    private String getContent(String category){
+        if (category.contains("Medical")) {
+            return "• Call emergency services immediately\n" +
+            "• Do not move the injured person\n" +
+            "• Apply pressure to bleeding\n" +
+            "• Keep the person conscious\n";
+        } else if (category.contains("Accident")) {
+            return "• Move to a safe location\n" +
+            "• Turn off engine if possible\n" +
+            "• Call emergency services\n" +
+            "• Share location with contacts";
+        } else {
+            return "• Trigger SOS immediately\n" +
+            "• Move to a crowded place\n" +
+            "• Stay on call with trusted contact\n" +
+            "• Trust your instincts";
+        }
+    }
+}
+
+
+app/java/com.lifeline.safety/activities/SafetyGuideActivity.java:
+package com.lifeline.safety.activities;
+
+import android.os.Bundle;
+import androidx.appcompat.app.AppCompatActivity;
+import androidx.recyclerview.widget.*;
+import com.lifeline.safety.R;
+import com.lifeline.safety.adapters.SafetyCategoryAdapter;
+
+import java.util.Arrays;
+import java.util.List;
+
+public class SafetyGuideActivity extends AppCompatActivity {
+
+    @Override
+    protected void onCreate(Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+        setContentView(R.layout.activity_safety_guide);
+
+        RecyclerView rv = findViewById(R.id.recyclerSafety);
+        rv.setLayoutManager(new LinearLayoutManager(this));
+
+        List<String> categories = Arrays.asList("🚑 Medical Emergency", "🚗 Accident", "🛑 Harassment / Threat");
+
+        rv.setAdapter(new SafetyCategoryAdapter(categories));
+    }
+}
+
+
+app/java/com.lifeline.safety/activities/ViewContactsActivity.java:
+package com.lifeline.safety.activities;
+
+import android.content.Intent;
+import android.os.Bundle;
+import androidx.appcompat.app.AppCompatActivity;
+import androidx.cardview.widget.CardView;
+import androidx.recyclerview.widget.*;
+
+import android.view.View;
+import android.widget.*;
+import com.lifeline.safety.R;
+import com.lifeline.safety.adapters.ContactAdapter;
+import com.lifeline.safety.db.DatabaseHelper;
+import com.lifeline.safety.models.Contact;
+
+import java.util.ArrayList;
+import java.util.List;
+
+public class ViewContactsActivity extends AppCompatActivity {
+
+    private ImageView backButton;
+    private ImageView settingsButton;
+    private RecyclerView rv;
+    private CardView addContactButton;
+    private DatabaseHelper db;
+    private ContactAdapter contactAdapter;
+    private List<Contact> contactList;
+
+    @Override
+    protected void onCreate(Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+        setContentView(R.layout.activity_view_contacts);
+
+        initializeViews();
+        setupDatabase();
+        setupRecyclerView();
+        setupClickListener();
+    }
+
+    @Override
+    protected void onResume() {
+        super.onResume();
+        refreshContactList();
+    }
+
+    private void initializeViews() {
+        backButton = findViewById(R.id.backButton);
+        settingsButton = findViewById(R.id.settingsButton);
+        rv = findViewById(R.id.recyclerContacts);
+        addContactButton = findViewById(R.id.addContactButton);
+    }
+
+    private void setupDatabase() {
+        db = new DatabaseHelper(this);
+    }
+
+    private void setupRecyclerView() {
+        contactList = db.getAllContacts();
+        if (contactList == null) {
+            contactList = new ArrayList<>();
+        }
+
+        TextView tvEmpty = findViewById(R.id.tvEmptyContacts);
+
+        if (contactList.isEmpty()) {
+            tvEmpty.setVisibility(View.VISIBLE);
+            rv.setVisibility(View.GONE);
+        } else {
+            tvEmpty.setVisibility(View.GONE);
+            rv.setVisibility(View.VISIBLE);
+        }
+
+        contactAdapter = new ContactAdapter(new ArrayList<>(contactList), db);
+        rv.setLayoutManager(new LinearLayoutManager(this));
+        rv.setAdapter(contactAdapter);
+    }
+
+    private void setupClickListener() {
+        backButton.setOnClickListener(v -> finish());
+        settingsButton.setOnClickListener(v -> openSettings());
+        addContactButton.setOnClickListener(v -> startActivity(new Intent(this, AddContactActivity.class)));
+    }
+
+    private void openSettings() {
+        Toast.makeText(this, "Settings coming soon", Toast.LENGTH_SHORT).show();
+    }
+
+    private void refreshContactList() {
+        contactList = db.getAllContacts();
+        if (contactList == null) {
+            contactList = new ArrayList<>();
+        }
+
+        TextView tvEmpty = findViewById(R.id.tvEmptyContacts);
+
+        if (contactList.isEmpty()) {
+            tvEmpty.setVisibility(View.VISIBLE);
+            rv.setVisibility(View.GONE);
+        } else {
+            tvEmpty.setVisibility(View.GONE);
+            rv.setVisibility(View.VISIBLE);
+        }
+
+        if (contactAdapter != null) {
+            contactAdapter.updateContacts(new ArrayList<>(contactList));
+        } else {
+            contactAdapter = new ContactAdapter(new ArrayList<>(contactList), db);
+            rv.setLayoutManager(new LinearLayoutManager(this));
+            rv.setAdapter(contactAdapter);
+        }
+    }
+
+    @Override
+    protected void onDestroy() {
+        super.onDestroy();
+        // Close database connection
+        if (db != null) {
+            db.close();
+        }
+    }
+}
+
+
+app/java/com.lifeline.safety/adapters/AlertHistoryAdapter.java:
+package com.lifeline.safety.adapters;
+
+import android.content.Intent;
+import android.net.Uri;
+import android.view.LayoutInflater;
+import android.view.View;
+import android.view.ViewGroup;
+import android.widget.TextView;
+
+import androidx.annotation.NonNull;
+import androidx.cardview.widget.CardView;
+import androidx.recyclerview.widget.RecyclerView;
+
+import com.google.android.material.imageview.ShapeableImageView;
+import com.lifeline.safety.R;
+import com.lifeline.safety.models.AlertHistory;
+
+import java.util.List;
+
+public class AlertHistoryAdapter extends RecyclerView.Adapter<AlertHistoryAdapter.ViewHolder> {
+
+    private final List<AlertHistory> history;
+
+    public AlertHistoryAdapter(List<AlertHistory> history) {
+        this.history = history;
+    }
+
+    static class ViewHolder extends RecyclerView.ViewHolder {
+        TextView tvDate, tvTime, tvLocation, tvDeliveryStatus;
+        TextView tvLocationTitle, tvLocationSubtitle, tvErrorMessage;
+        ShapeableImageView mapPreview;
+        CardView errorCard;
+
+        ViewHolder(@NonNull View v) {
+            super(v);
+            tvDate = v.findViewById(R.id.tvDate);
+            tvTime = v.findViewById(R.id.tvTime);
+            tvLocation = v.findViewById(R.id.tvLocation);
+            tvDeliveryStatus = v.findViewById(R.id.tvDeliveryStatus);
+            tvLocationTitle = v.findViewById(R.id.tvLocationTitle);
+            tvLocationSubtitle = v.findViewById(R.id.tvLocationSubtitle);
+            tvErrorMessage = v.findViewById(R.id.tvErrorMessage);
+            mapPreview = v.findViewById(R.id.mapPreview);
+            errorCard = v.findViewById(R.id.errorCard);
+        }
+    }
+
+    @NonNull
+    @Override
+    public ViewHolder onCreateViewHolder(@NonNull ViewGroup parent, int viewType) {
+        View v = LayoutInflater.from(parent.getContext())
+                .inflate(R.layout.item_alert_history, parent, false);
+        return new ViewHolder(v);
+    }
+
+    @Override
+    public void onBindViewHolder(@NonNull ViewHolder h, int pos) {
+        AlertHistory item = history.get(pos);
+
+        String location = item.getLocation();
+        boolean isSuccessful = item.isSuccessful();
+
+        h.tvDate.setText(item.getDate());
+        h.tvTime.setText(item.getTime());
+        h.tvLocation.setText(location);
+
+        // Clear old listeners (RecyclerView reuse safety)
+        h.tvLocation.setOnClickListener(null);
+        if (h.mapPreview != null) {
+            h.mapPreview.setOnClickListener(null);
+        }
+
+        // Configure UI based on success/failure
+        if (isSuccessful) {
+            // Success state - show map preview and "Delivered" status
+            h.tvDeliveryStatus.setVisibility(View.VISIBLE);
+            h.tvDeliveryStatus.setText(" • Delivered");
+            h.tvDeliveryStatus.setTextColor(h.itemView.getContext().getResources().getColor(R.color.status_green, null));
+
+            h.tvLocationTitle.setText("Location Shared");
+            h.tvLocationSubtitle.setText("Sent to Emergency Contacts");
+
+            h.mapPreview.setVisibility(View.VISIBLE);
+            h.errorCard.setVisibility(View.GONE);
+
+            // Make map preview and location clickable
+            if (location != null && location.startsWith("http")) {
+                View.OnClickListener clickListener = v -> {
+                    Intent intent = new Intent(Intent.ACTION_VIEW, Uri.parse(location));
+                    v.getContext().startActivity(intent);
+                };
+
+                h.tvLocation.setOnClickListener(clickListener);
+                h.mapPreview.setOnClickListener(clickListener);
+            }
+        } else {
+            // Error state - hide map, show error card, hide "Delivered"
+            h.tvDeliveryStatus.setVisibility(View.GONE);
+
+            h.tvLocationTitle.setText("Alert Failed");
+            h.tvLocationSubtitle.setText("Could not send SOS");
+
+            h.mapPreview.setVisibility(View.GONE);
+            h.errorCard.setVisibility(View.VISIBLE);
+
+            // Set error message
+            String errorMessage = item.getErrorMessage();
+            h.tvErrorMessage.setText(errorMessage);
+        }
+    }
+
+    @Override
+    public int getItemCount() {
+        return history.size();
+    }
+}
+
+
+app/java/com.lifeline.safety/adapters/ContactAdapter.java:
+package com.lifeline.safety.adapters;
+
+import android.view.*;
+import android.widget.*;
+
+import androidx.annotation.NonNull;
+import androidx.recyclerview.widget.RecyclerView;
+import com.lifeline.safety.R;
+import com.lifeline.safety.db.DatabaseHelper;
+import com.lifeline.safety.models.Contact;
+import java.util.ArrayList;
+
+public class ContactAdapter extends RecyclerView.Adapter<ContactAdapter.ViewHolder> {
+    ArrayList<Contact> contacts;
+    DatabaseHelper db;
+
+    public ContactAdapter(ArrayList<Contact> contacts, DatabaseHelper db){
+        this.contacts = contacts;
+        this.db = db;
+    }
+
+    // ✅ PROPERLY UPDATE CONTACTS
+    public void updateContacts(ArrayList<Contact> newContacts) {
+        if (newContacts != null) {
+            this.contacts.clear();
+            this.contacts.addAll(newContacts);
+            notifyDataSetChanged();
+        }
+    }
+
+    static class ViewHolder extends RecyclerView.ViewHolder{
+        TextView tvName, tvPhone;
+        ImageView btnDelete;
+
+        ViewHolder(View v){
+            super(v);
+            tvName = v.findViewById(R.id.tvName);
+            tvPhone = v.findViewById(R.id.tvPhone);
+            btnDelete = v.findViewById(R.id.btnDelete);
+        }
+    }
+
+    @NonNull
+    @Override
+    public ViewHolder onCreateViewHolder(@NonNull ViewGroup parent, int viewType) {
+        View v = LayoutInflater.from(parent.getContext()).inflate(R.layout.item_contact, parent, false);
+        return new ViewHolder(v);
+    }
+
+    @Override
+    public void onBindViewHolder(@NonNull ViewHolder holder, int position) {
+        Contact c = contacts.get(position);
+        holder.tvName.setText(c.getName());
+        holder.tvPhone.setText(c.getPhone());
+
+        holder.btnDelete.setOnClickListener(v -> {
+            db.deleteContact(c.getId());
+            contacts.remove(position);
+            notifyItemRemoved(position);
+            notifyItemRangeChanged(position, contacts.size());
+        });
+    }
+
+    @Override
+    public int getItemCount() {
+        return contacts.size();
+    }
+}
+
+
+app/java/com.lifeline.safety/adapters/SafetyCategoryAdapter.java:
+package com.lifeline.safety.adapters;
+
+import android.content.Intent;
+import android.view.*;
+import android.widget.TextView;
+
+import androidx.annotation.NonNull;
+import androidx.recyclerview.widget.RecyclerView;
+import com.lifeline.safety.R;
+import com.lifeline.safety.activities.SafetyDetailActivity;
+import java.util.List;
+
+public class SafetyCategoryAdapter extends  RecyclerView.Adapter<SafetyCategoryAdapter.ViewHolder>{
+    private final List<String> categories;
+
+    public SafetyCategoryAdapter(List<String> categories){
+        this.categories = categories;
+    }
+
+    static class ViewHolder extends RecyclerView.ViewHolder{
+        TextView tv;
+        ViewHolder(View v){
+            super(v);
+            tv = v.findViewById(R.id.tvCategory);
+        }
+    }
+
+    @NonNull
+    @Override
+    public ViewHolder onCreateViewHolder(ViewGroup p, int v) {
+        return new ViewHolder(LayoutInflater.from(p.getContext()).inflate(R.layout.item_safety_category, p, false));
+    }
+
+    @Override
+    public void onBindViewHolder(ViewHolder h, int pos){
+        String category = categories.get(pos);
+        h.tv.setText(category);
+        h.itemView.setOnClickListener(v -> {
+            Intent i = new Intent(v.getContext(), SafetyDetailActivity.class);
+            i.putExtra("category", category);
+            v.getContext().startActivity(i);
+        });
+    }
+
+    @Override
+    public int getItemCount() {
+        return categories.size();
+    }
+}
+
+
+app/java/com.lifeline.safety/db/DatabaseHelper.java:
+package com.lifeline.safety.db;
+
+import android.content.*;
+import android.database.Cursor;
+import android.database.sqlite.*;
+import androidx.annotation.Nullable;
+
+import com.lifeline.safety.models.AlertHistory;
+import com.lifeline.safety.models.Contact;
+import java.util.List;
+import java.util.ArrayList;
+
+public class DatabaseHelper extends SQLiteOpenHelper {
+    private static final String DATABASE_NAME = "lifeline.db";
+    private static final int DATABASE_VERSION = 1;
+
+    public static final String TABLE_CONTACTS = "EmergencyContacts";
+    public static final String CONTACT_ID = "id";
+    public static final String CONTACT_NAME = "name";
+    public static final String CONTACT_PHONE = "phone";
+
+    public static final String TABLE_HISTORY = "AlertHistory";
+    public static final String HISTORY_ID = "id";
+    public static final String HISTORY_DATE = "date";
+    public static final String HISTORY_TIME = "time";
+    public static final String HISTORY_LOCATION = "location";
+
+    public DatabaseHelper(@Nullable Context context){
+        super(context, DATABASE_NAME, null, DATABASE_VERSION);
+    }
+
+    @Override
+    public void onCreate(SQLiteDatabase db){
+        String createContactsTable = "CREATE TABLE " + TABLE_CONTACTS + " (" + CONTACT_ID + " INTEGER PRIMARY KEY AUTOINCREMENT, " + CONTACT_NAME + " TEXT NOT NULL, " + CONTACT_PHONE + " TEXT NOT NULL);";
+
+        String createHistoryTable = "CREATE TABLE " + TABLE_HISTORY + " (" + HISTORY_ID + " INTEGER PRIMARY KEY AUTOINCREMENT, " + HISTORY_DATE + " TEXT, " + HISTORY_TIME + " TEXT, " + HISTORY_LOCATION + " TEXT);";
+
+        db.execSQL(createContactsTable);
+        db.execSQL(createHistoryTable);
+    }
+
+    @Override
+    public void onUpgrade(SQLiteDatabase db, int oldVersion, int newVersion) {
+        db.execSQL("DROP TABLE IF EXISTS " + TABLE_CONTACTS);
+        db.execSQL("DROP TABLE IF EXISTS " + TABLE_HISTORY);
+        onCreate(db);
+    }
+
+    public boolean insertContact(String name, String phone) {
+        SQLiteDatabase db = this.getWritableDatabase();
+        ContentValues values = new ContentValues();
+        values.put(CONTACT_NAME, name);
+        values.put(CONTACT_PHONE, phone);
+
+        long result = db.insert(TABLE_CONTACTS, null, values);
+        return result != -1;
+    }
+
+    public List<Contact> getAllContacts() {
+        List<Contact> list = new ArrayList<>();
+        SQLiteDatabase db = this.getReadableDatabase();
+        Cursor cursor = db.rawQuery("SELECT * FROM " + TABLE_CONTACTS + " ORDER BY " + CONTACT_ID + " DESC", null);
+
+        if (cursor != null) {
+            while (cursor.moveToNext()) {
+                list.add(new Contact(
+                        cursor.getInt(0),
+                        cursor.getString(1),
+                        cursor.getString(2)
+                ));
+            }
+            cursor.close();
+        }
+        return list;
+    }
+
+
+    public void deleteContact(int id){
+        SQLiteDatabase db = getWritableDatabase();
+        db.delete(TABLE_CONTACTS, CONTACT_ID + "=?", new String[]{String.valueOf(id)});
+    }
+
+    public ArrayList<String> getAllContactPhones(){
+        ArrayList<String> phones = new ArrayList<>();
+        SQLiteDatabase db = this.getReadableDatabase();
+        Cursor cursor = db.rawQuery("SELECT " + CONTACT_PHONE + " FROM " + TABLE_CONTACTS, null);
+
+        if (cursor != null) {
+            while (cursor.moveToNext()) {
+                phones.add(cursor.getString(0));
+            }
+            cursor.close();
+        }
+        return phones;
+    }
+
+    public void insertAlertHistory(String date, String time, String location){
+        SQLiteDatabase db = this.getWritableDatabase();
+        ContentValues values = new ContentValues();
+        values.put(HISTORY_DATE, date);
+        values.put(HISTORY_TIME, time);
+        values.put(HISTORY_LOCATION, location);
+        db.insert(TABLE_HISTORY, null, values);
+    }
+
+    public ArrayList<AlertHistory> getAllAlertHistory(){
+        ArrayList<AlertHistory> history = new ArrayList<>();
+        SQLiteDatabase db = this.getReadableDatabase();
+
+        Cursor cursor = db.query(TABLE_HISTORY, null, null, null, null, null, HISTORY_ID + " DESC");
+
+        if (cursor != null) {
+            while (cursor.moveToNext()) {
+                history.add(new AlertHistory(
+                        cursor.getInt(cursor.getColumnIndexOrThrow(HISTORY_ID)),
+                        cursor.getString(cursor.getColumnIndexOrThrow(HISTORY_DATE)),
+                        cursor.getString(cursor.getColumnIndexOrThrow(HISTORY_TIME)),
+                        cursor.getString(cursor.getColumnIndexOrThrow(HISTORY_LOCATION))
+                ));
+            }
+            cursor.close();
+        }
+        return history;
+    }
+}
+
+
+app/java/com.lifeline.safety/models/AlertHistory.java:
+package com.lifeline.safety.models;
+
+public class AlertHistory {
+    private final int id;
+    private final String date;
+    private final String time;
+    private final String location;
+
+    public AlertHistory(int id, String date, String time, String location) {
+        this.id = id;
+        this.date = date;
+        this.time = time;
+        this.location = location;
+    }
+
+    public int getId() { return id; }
+    public String getDate() { return date; }
+    public String getTime() { return time; }
+    public String getLocation() { return location; }
+
+    // Helper method to check if alert was successful
+    public boolean isSuccessful() {
+        return location != null &&
+                location.startsWith("http") &&  // Valid Google Maps link
+                !location.equals("Unavailable");
+    }
+
+    // Helper method to get error message
+    public String getErrorMessage() {
+        if (location != null && location.startsWith("FAILED: ")) {
+            // Remove "FAILED: " prefix and return the actual error
+            return location.substring(8);
+        } else if (location == null || location.equals("Unavailable")) {
+            return "Location unavailable";
+        }
+        return "Unknown error occurred";
+    }
+}
+
+
+app/java/com.lifeline.safety/models/Contact.java:
+package com.lifeline.safety.models;
+
+public class Contact {
+    private int id;
+    private String name;
+    private String phone;
+
+    public Contact(int id, String name, String phone) {
+        this.id = id;
+        this.name = name;
+        this.phone = phone;
+    }
+
+    public int getId() {return id;}
+    public String getName() {return name;}
+    public String getPhone() {return phone;}
+}
+
+
+app/java/com.lifeline.safety/utils/CooldownManager.java:
+package com.lifeline.safety.utils;
+
+public class CooldownManager {
+    private static final long COOLDOWN_MS = 15000; // 15 seconds
+    private static long lastTriggerTime = 0;
+
+    public static boolean isCoolingDown() {
+        return System.currentTimeMillis() - lastTriggerTime < COOLDOWN_MS;
+    }
+
+    public static void markTriggered() {
+        lastTriggerTime = System.currentTimeMillis();
+    }
+}
+
+
+app/java/com.lifeline.safety/utils/LocationHelper.java:
+package com.lifeline.safety.utils;
+
+import android.annotation.SuppressLint;
+import android.content.Context;
+import android.location.Location;
+import android.os.Looper;
+
+import androidx.annotation.NonNull;
+
+import com.google.android.gms.location.*;
+
+public class LocationHelper {
+
+    public interface LocationResultListener{
+        void onLocationFetched(String locationLink);
+        void onLocationFailed();
+    }
+
+    private final FusedLocationProviderClient locationClient;
+
+    public LocationHelper(Context context){
+        locationClient = LocationServices.getFusedLocationProviderClient(context);
+    }
+
+    @SuppressLint("MissingPermission")
+    public void fetchLocation(LocationResultListener listener) {
+        locationClient.getLastLocation().addOnSuccessListener(location -> {
+            if(location != null){
+                listener.onLocationFetched(generateMapsLink(location));
+            } else {
+                requestCurrentLocation(listener);
+            }
+        }).addOnFailureListener(e -> listener.onLocationFailed());
+    }
+
+    @SuppressLint("MissingPermission")
+    private void requestCurrentLocation(LocationResultListener listener){
+        LocationRequest request = new LocationRequest.Builder(Priority.PRIORITY_HIGH_ACCURACY, 3000).setMinUpdateIntervalMillis(2000).setMaxUpdates(1).build();
+
+        locationClient.requestLocationUpdates(request, new LocationCallback() {
+            @Override
+            public void onLocationResult(@NonNull LocationResult result){
+                locationClient.removeLocationUpdates(this);
+                Location location = result.getLastLocation();
+                if (location != null){
+                    listener.onLocationFetched(generateMapsLink(location));
+                } else {
+                    listener.onLocationFailed();
+                }
+            }
+        }, Looper.getMainLooper());
+    }
+
+    private String generateMapsLink(Location location){
+        return "https://maps.google.com/?q=" + location.getLatitude() + "," + location.getLongitude();
+    }
+}
+
+
+app/java/com.lifeline.safety/utils/PermissionManager.java:
+package com.lifeline.safety.utils;
+
+import android.Manifest;
+import android.app.Activity;
+import android.content.Intent;
+import android.content.pm.PackageManager;
+import android.net.Uri;
+import android.provider.Settings;
+
+import androidx.appcompat.app.AlertDialog;
+import androidx.core.app.ActivityCompat;
+import androidx.core.content.ContextCompat;
+
+public class PermissionManager {
+    public static final int SOS_PERMISSION_CODE = 100;
+
+    private static boolean hasLocationPermission(Activity activity){
+        return ContextCompat.checkSelfPermission(activity, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED || ContextCompat.checkSelfPermission(activity, Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED;
+    }
+
+    private static boolean hasSmsPermission(Activity activity){
+        return ContextCompat.checkSelfPermission(activity, Manifest.permission.SEND_SMS) == PackageManager.PERMISSION_GRANTED;
+    }
+
+    public static boolean hasSOSPermissions(Activity activity){
+        return hasLocationPermission(activity) && hasSmsPermission(activity);
+    }
+
+    public static void requestSOSPermissions(Activity activity){
+        ActivityCompat.requestPermissions(activity, new String[]{
+                Manifest.permission.ACCESS_FINE_LOCATION,
+                Manifest.permission.ACCESS_COARSE_LOCATION,
+                Manifest.permission.SEND_SMS
+        }, SOS_PERMISSION_CODE);
+    }
+
+    public static boolean shouldShowRationale(Activity activity){
+        return ActivityCompat.shouldShowRequestPermissionRationale(activity, Manifest.permission.ACCESS_FINE_LOCATION) || ActivityCompat.shouldShowRequestPermissionRationale(activity, Manifest.permission.ACCESS_COARSE_LOCATION) || ActivityCompat.shouldShowRequestPermissionRationale(activity, Manifest.permission.SEND_SMS);
+    }
+
+    public static void showRationaleDialog(Activity activity){
+        new AlertDialog.Builder(activity).setTitle("Permissions Required").setMessage("LIFELINE needs location (precise or approximate) and SMS permissions to send emergency alerts with your live location.").setCancelable(false).setPositiveButton("Allow", (d, w) -> requestSOSPermissions(activity)).setNegativeButton("Cancel", null).show();
+    }
+
+    public static void showSettingsDialog(Activity activity){
+        new AlertDialog.Builder(activity).setTitle("Enable Permissions").setMessage("Permissions are permanently denied. Please enable them manually from app settings.").setCancelable(false).setPositiveButton("Open Settings", (d, w) -> {
+            Intent intent = new Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS);
+            intent.setData(Uri.fromParts("package", activity.getPackageName(), null));
+            activity.startActivity(intent);
+        }).setNegativeButton("Cancel", null).show();
+    }
+}
+
+
+app/java/com.lifeline.safety/utils/ShakeDetector.java:
+package com.lifeline.safety.utils;
+
+import android.content.Context;
+import android.hardware.Sensor;
+import android.hardware.SensorEvent;
+import android.hardware.SensorEventListener;
+import android.hardware.SensorManager;
+
+public class ShakeDetector implements SensorEventListener{
+    public interface OnShakeConfirmed {
+        void onShakeConfirmed();
+    }
+
+    private static final float SHAKE_THRESHOLD = 2.5f;
+    private static final int REQUIRED_SHAKES = 2;
+    private static final long SHAKE_WINDOW_MS = 2000;
+
+    private int shakeCount = 0;
+    private long firstShakeTime = 0;
+
+    private final SensorManager sensorManager;
+    private final Sensor accelerometer;
+    private final OnShakeConfirmed listener;
+
+    private long lastShakeTime = 0;
+
+    public ShakeDetector(Context context, OnShakeConfirmed listener){
+        this.listener = listener;
+        sensorManager = (SensorManager) context.getSystemService(Context.SENSOR_SERVICE);
+        accelerometer = sensorManager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER);
+    }
+
+    public void start(){
+        if(accelerometer != null){
+            sensorManager.registerListener(this, accelerometer, SensorManager.SENSOR_DELAY_UI);
+        }
+    }
+
+    public void stop(){
+        sensorManager.unregisterListener(this);
+        shakeCount = 0;
+        firstShakeTime = 0;
+    }
+
+    @Override
+    public void onSensorChanged(SensorEvent event){
+        float x = event.values[0];
+        float y = event.values[1];
+        float z = event.values[2];
+
+        float gX = x / SensorManager.GRAVITY_EARTH;
+        float gY = y / SensorManager.GRAVITY_EARTH;
+        float gZ = z / SensorManager.GRAVITY_EARTH;
+
+        float gForce = (float) Math.sqrt(gX * gX + gY * gY + gZ * gZ);
+
+        if(gForce > SHAKE_THRESHOLD){
+            long now = System.currentTimeMillis();
+
+            if (shakeCount == 0){
+                firstShakeTime = now;
+            }
+
+            shakeCount++;
+
+            if (shakeCount >= REQUIRED_SHAKES && (now - firstShakeTime) <= SHAKE_WINDOW_MS){
+                shakeCount = 0;
+                listener.onShakeConfirmed();
+            }
+
+            if((now - firstShakeTime) > SHAKE_WINDOW_MS){
+                shakeCount = 0;
+            }
+        }
+    }
+
+    @Override
+    public void onAccuracyChanged(Sensor sensor, int accuracy){
+        // Not required
+    }
+}
+
+
+app/java/com.lifeline.safety/utils/SmsHelper.java:
+package com.lifeline.safety.utils;
+
+import android.app.PendingIntent;
+import android.content.Context;
+import android.content.Intent;
+import android.telephony.SmsManager;
+import android.widget.Toast;
+import java.util.List;
+
+public class SmsHelper {
+    public interface SmsStatusListener{
+        void onAllMessagesAttempted();
+    }
+
+    private final Context context;
+
+    public SmsHelper(Context context){
+        this.context = context.getApplicationContext();
+    }
+
+    public void sendEmergencySms(List<String> phoneNumbers, String message, SmsStatusListener listener){
+        SmsManager smsManager = SmsManager.getDefault();
+
+        for (String phone : phoneNumbers){
+            try{
+                PendingIntent sentIntent = PendingIntent.getBroadcast(context, 0, new Intent("SMS_SENT"), PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
+
+                smsManager.sendTextMessage(phone, null, message, sentIntent, null);
+            } catch (Exception e){
+                Toast.makeText(context, "Failed to send SMS to " + phone, Toast.LENGTH_SHORT).show();
+            }
+        }
+
+        if(listener != null){
+            listener.onAllMessagesAttempted();
+        }
+    }
+}
+
+
+app/java/com.lifeline.safety/utils/SosEngine.java:
+package com.lifeline.safety.utils;
+
+import android.content.Context;
+import android.os.Handler;
+import android.os.Looper;
+
+import com.lifeline.safety.db.DatabaseHelper;
+
+import java.text.SimpleDateFormat;
+import java.util.Date;
+import java.util.List;
+import java.util.Locale;
+import java.util.concurrent.atomic.AtomicBoolean;
+
+public class SosEngine {
+    public interface SosCallback{
+        void onStarted();
+        void onCompleted();
+        void onFailed(String reason);
+    }
+
+    private final Context context;
+    private final DatabaseHelper db;
+    private final LocationHelper locationHelper;
+    private final SmsHelper smsHelper;
+
+    private static final AtomicBoolean isRunning = new AtomicBoolean(false);
+
+    public SosEngine(Context context){
+        this.context = context.getApplicationContext();
+        this.db = new DatabaseHelper(context);
+        this.locationHelper = new LocationHelper(context);
+        this.smsHelper = new SmsHelper(context);
+    }
+
+    public void triggerSOS(SosCallback callback){
+        if(!isRunning.compareAndSet(false, true)){
+            logFailure("Duplicate SOS trigger blocked");
+            callback.onFailed("SOS already in progress");
+            return;
+        }
+
+        callback.onStarted();
+
+        List<String> phones = db.getAllContactPhones();
+        if(phones.isEmpty()){
+            logFailure("No emergency contacts");
+            isRunning.set(false);
+            callback.onFailed("No emergency contacts found");
+            return;
+        }
+
+        locationHelper.fetchLocation(new LocationHelper.LocationResultListener() {
+            @Override
+            public void onLocationFetched(String locationLink) {
+                sendSmsAndLog(phones, locationLink, callback);
+            }
+
+            @Override
+            public void onLocationFailed() {
+                sendSmsAndLog(phones, null, callback);
+            }
+        });
+    }
+
+    private void sendSmsAndLog(List<String> phones, String locationLink, SosCallback callback){
+        saveHistory(locationLink);
+
+        String message = "🚨 EMERGENCY ALERT!\nI need immediate help.\n";
+
+        if (locationLink != null) {
+            message += "Location:\n" + locationLink;
+        } else {
+            message += "Location unavailable.";
+        }
+
+        smsHelper.sendEmergencySms(phones, message, () -> {
+            new Handler(Looper.getMainLooper()).post(() -> {
+                isRunning.set(false);
+                callback.onCompleted();
+            });
+        });
+    }
+
+    private void saveHistory(String location){
+        String date = new SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(new Date());
+        String time = new SimpleDateFormat("HH:mm:ss", Locale.getDefault()).format(new Date());
+        db.insertAlertHistory(date, time, location != null ? location : "Unavailable");
+    }
+
+    private void logFailure(String reason){
+        String date = new SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(new Date());
+        String time = new SimpleDateFormat("HH:mm:ss", Locale.getDefault()).format(new Date());
+        db.insertAlertHistory(date, time, "FAILED: " + reason);
+    }
+}
+
+
+app/res/layout/activity_add_contact.xml:
+<?xml version="1.0" encoding="utf-8"?>
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@color/light_home_background"
+    android:fillViewport="true">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical">
+
+        <!-- Top Bar -->
+        <RelativeLayout
+            android:id="@+id/topBar"
+            android:layout_width="match_parent"
+            android:layout_height="64dp"
+            android:paddingStart="8dp"
+            android:paddingEnd="16dp">
+
+            <ImageView
+                android:id="@+id/btnBack"
+                android:layout_width="48dp"
+                android:layout_height="48dp"
+                android:layout_centerVertical="true"
+                android:src="@drawable/ic_back"
+                android:padding="12dp"
+                android:background="?attr/selectableItemBackgroundBorderless"
+                android:contentDescription="Back"/>
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_centerInParent="true"
+                android:text="Add Contact"
+                android:textColor="@color/black"
+                android:textSize="20sp"
+                android:fontFamily="sans-serif-medium"
+                android:textStyle="bold"/>
+        </RelativeLayout>
+
+        <!-- Divider Line -->
+        <View
+            android:layout_width="match_parent"
+            android:layout_height="1dp"
+            android:background="@color/add_contact_divider"/>
+
+        <!-- Profile Photo Section -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:gravity="center"
+            android:paddingTop="40dp"
+            android:paddingBottom="32dp">
+
+            <!-- Circular Photo Placeholder -->
+            <FrameLayout
+                android:id="@+id/photoContainer"
+                android:layout_width="160dp"
+                android:layout_height="160dp"
+                android:background="@drawable/circle_photo_placeholder">
+
+                <ImageView
+                    android:id="@+id/ivContactPhoto"
+                    android:layout_width="match_parent"
+                    android:layout_height="match_parent"
+                    android:scaleType="centerCrop"
+                    android:visibility="gone"/>
+
+                <ImageView
+                    android:id="@+id/ivCameraIcon"
+                    android:layout_width="140dp"
+                    android:layout_height="140dp"
+                    android:layout_gravity="center"
+                    android:src="@drawable/profile"
+                    android:contentDescription="Camera"/>
+            </FrameLayout>
+
+            <!-- Upload Photo Text -->
+            <TextView
+                android:id="@+id/tvUploadPhoto"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Upload photo"
+                android:textColor="#F20D0D"
+                android:textSize="16sp"
+                android:fontFamily="sans-serif-medium"
+                android:layout_marginTop="16dp"
+                android:clickable="true"
+                android:focusable="true"
+                android:background="?attr/selectableItemBackgroundBorderless"
+                android:padding="8dp"/>
+        </LinearLayout>
+
+        <!-- Import from Contacts Button -->
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btnImportContacts"
+            android:layout_width="match_parent"
+            android:layout_height="60dp"
+            android:layout_marginStart="42dp"
+            android:layout_marginEnd="42dp"
+            android:layout_marginBottom="24dp"
+            android:text="Import from Contacts"
+            android:textColor="@color/black"
+            android:textSize="16sp"
+            android:fontFamily="sans-serif-medium"
+            android:textAllCaps="false"
+            app:icon="@drawable/ic_import_contacts"
+            app:iconTint="@null"
+            app:iconSize="24dp"
+            app:iconGravity="textStart"
+            app:iconPadding="12dp"
+            android:backgroundTint="@color/white"
+            app:strokeColor="#F4F5F7"
+            app:strokeWidth="2dp"
+            app:cornerRadius="15dp"
+            android:elevation="0dp"
+            app:elevation="0dp"/>
+
+        <!-- Form Section -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="300dp"
+            android:orientation="vertical"
+            android:paddingStart="42dp"
+            android:paddingEnd="42dp">
+
+            <!-- Full Name Label -->
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginBottom="8dp"
+                android:fontFamily="sans-serif-medium"
+                android:letterSpacing="0.05"
+                android:text="FULL NAME"
+                android:textColor="#6C7381"
+                android:textSize="12sp"
+                android:textStyle="bold" />
+
+            <!-- Full Name Input -->
+            <com.google.android.material.textfield.TextInputLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginBottom="24dp"
+                app:boxBackgroundColor="@color/white"
+                app:boxBackgroundMode="outline"
+                app:boxCornerRadiusBottomEnd="30dp"
+                app:boxCornerRadiusBottomStart="30dp"
+                app:boxCornerRadiusTopEnd="30dp"
+                app:boxCornerRadiusTopStart="50dp"
+                app:boxStrokeColor="#F4F5F7"
+                app:boxStrokeWidth="1dp"
+                app:boxStrokeWidthFocused="2dp"
+                app:endIconDrawable="@drawable/ic_person"
+                app:endIconMode="custom"
+                app:endIconTint="#9CA3AF"
+                app:hintEnabled="false">
+
+                <com.google.android.material.textfield.TextInputEditText
+                    android:id="@+id/etFullName"
+                    android:layout_width="match_parent"
+                    android:layout_height="56dp"
+                    android:background="@drawable/text_field"
+                    android:fontFamily="sans-serif"
+                    android:hint="e.g. John Doe"
+                    android:inputType="textPersonName"
+                    android:paddingStart="20dp"
+                    android:paddingEnd="48dp"
+                    android:textColor="@color/black"
+                    android:textColorHint="#BDBDBD"
+                    android:textSize="16sp"
+                    android:textStyle="bold" />
+            </com.google.android.material.textfield.TextInputLayout>
+
+            <!-- Phone Number Label -->
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginBottom="8dp"
+                android:fontFamily="sans-serif-medium"
+                android:letterSpacing="0.05"
+                android:text="PHONE NUMBER"
+                android:textColor="#6C7381"
+                android:textSize="12sp"
+                android:textStyle="bold" />
+
+            <!-- Phone Number Input -->
+            <com.google.android.material.textfield.TextInputLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginBottom="60dp"
+                app:boxBackgroundColor="@color/white"
+                app:boxBackgroundMode="outline"
+                app:boxCornerRadiusBottomEnd="30dp"
+                app:boxCornerRadiusBottomStart="30dp"
+                app:boxCornerRadiusTopEnd="30dp"
+                app:boxCornerRadiusTopStart="30dp"
+                app:boxStrokeColor="#F4F5F7"
+                app:boxStrokeWidth="1dp"
+                app:boxStrokeWidthFocused="2dp"
+                app:endIconDrawable="@drawable/ic_phone"
+                app:endIconMode="custom"
+                app:endIconTint="#9CA3AF"
+                app:hintEnabled="false">
+
+                <com.google.android.material.textfield.TextInputEditText
+                    android:id="@+id/etPhoneNumber"
+                    android:layout_width="match_parent"
+                    android:layout_height="56dp"
+                    android:background="@drawable/text_field"
+                    android:fontFamily="sans-serif"
+                    android:hint="+91 9876543210"
+                    android:inputType="phone"
+                    android:paddingStart="20dp"
+                    android:paddingEnd="48dp"
+                    android:textColor="@color/black"
+                    android:textColorHint="#BDBDBD"
+                    android:textSize="16sp"
+                    android:textStyle="bold" />
+            </com.google.android.material.textfield.TextInputLayout>
+        </LinearLayout>
+
+        <!-- Save Contact Button -->
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btnSaveContact"
+            android:layout_width="match_parent"
+            android:layout_height="68dp"
+            android:layout_marginStart="42dp"
+            android:layout_marginEnd="42dp"
+            android:layout_marginBottom="32dp"
+            android:backgroundTint="#F20D0D"
+            android:elevation="4dp"
+            android:fontFamily="sans-serif-bold"
+            android:text="Save Contact"
+            android:textStyle="bold"
+            android:textAllCaps="false"
+            android:textColor="@color/white"
+            android:textSize="18sp"
+            app:cornerRadius="50dp"
+            app:elevation="4dp"
+            app:icon="@drawable/ic_save"
+            app:iconGravity="textStart"
+            app:iconPadding="12dp"
+            app:iconSize="24dp"
+            app:iconTint="@color/white" />
+    </LinearLayout>
+</ScrollView>
+
+
+app/res/layout/activity_alert_history.xml:
+<?xml version="1.0" encoding="utf-8"?>
+<RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@color/background_light_gray">
+
+    <!-- Top Bar -->
+    <RelativeLayout
+        android:id="@+id/topBar"
+        android:layout_width="match_parent"
+        android:layout_height="56dp"
+        android:elevation="2dp">
+
+        <ImageView
+            android:id="@+id/backButton"
+            android:layout_width="48dp"
+            android:layout_height="48dp"
+            android:layout_centerVertical="true"
+            android:layout_marginStart="8dp"
+            android:src="@drawable/ic_back"
+            android:padding="12dp"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            app:tint="#000000"/>
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_centerInParent="true"
+            android:text="Alert History"
+            android:textColor="@color/black"
+            android:textStyle="bold"
+            android:textSize="22sp"
+            android:fontFamily="sans-serif-medium"/>
+    </RelativeLayout>
+    <!-- Filter Tabs -->
+    <HorizontalScrollView
+        android:id="@+id/filterTabs"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_below="@id/topBar"
+        android:scrollbars="none"
+        android:paddingTop="12dp"
+        android:paddingBottom="12dp"
+        android:paddingStart="16dp"
+        android:paddingEnd="16dp">
+
+        <LinearLayout
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal">
+
+            <TextView
+                android:id="@+id/filterAll"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="All"
+                android:textColor="#FFFFFF"
+                android:textSize="16sp"
+                android:fontFamily="sans-serif-medium"
+                android:background="@drawable/tab_selected_bg"
+                android:paddingStart="24dp"
+                android:paddingEnd="24dp"
+                android:paddingTop="10dp"
+                android:paddingBottom="10dp"
+                android:layout_marginEnd="8dp"/>
+
+            <TextView
+                android:id="@+id/filterResolved"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Resolved"
+                android:textColor="#6B7280"
+                android:textSize="16sp"
+                android:fontFamily="sans-serif-medium"
+                android:background="@drawable/tab_unselected_bg"
+                android:paddingStart="24dp"
+                android:paddingEnd="24dp"
+                android:paddingTop="10dp"
+                android:paddingBottom="10dp"
+                android:layout_marginEnd="8dp"/>
+
+            <TextView
+                android:id="@+id/filterActive"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Active"
+                android:textColor="#6B7280"
+                android:textSize="16sp"
+                android:fontFamily="sans-serif-medium"
+                android:background="@drawable/tab_unselected_bg"
+                android:paddingStart="24dp"
+                android:paddingEnd="24dp"
+                android:paddingTop="10dp"
+                android:paddingBottom="10dp"/>
+        </LinearLayout>
+    </HorizontalScrollView>
+
+    <ScrollView
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:layout_below="@id/filterTabs"
+        android:layout_above="@id/bottomNav"
+        android:fillViewport="true">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:padding="16dp">
+
+            <!-- Recent Section -->
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Recent"
+                android:textColor="@color/black"
+                android:textSize="24sp"
+                android:fontFamily="sans-serif-medium"
+                android:layout_marginBottom="16dp"/>
+
+            <TextView
+                android:id="@+id/tvEmpty"
+                android:text="No alerts triggered yet."
+                android:textColor="?attr/colorOnSurfaceVariant"
+                android:visibility="gone"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"/>
+
+            <androidx.recyclerview.widget.RecyclerView
+                android:id="@+id/recyclerHistory"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"/>
+        </LinearLayout>
+    </ScrollView>
+
+    <!-- Bottom Navigation -->
+    <LinearLayout
+        android:id="@+id/bottomNav"
+        android:layout_width="match_parent"
+        android:layout_height="72dp"
+        android:layout_alignParentBottom="true"
+        android:background="#FFFFFF"
+        android:orientation="horizontal"
+        android:elevation="8dp"
+        android:paddingTop="8dp"
+        android:paddingBottom="8dp">
+
+        <LinearLayout
+            android:id="@+id/navHome"
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+            android:layout_weight="1"
+            android:orientation="vertical"
+            android:gravity="center"
+            android:background="?attr/selectableItemBackgroundBorderless">
+
+            <ImageView
+                android:layout_width="24dp"
+                android:layout_height="24dp"
+                android:src="@drawable/ic_home"
+                app:tint="#9CA3AF"/>
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Home"
+                android:textColor="#9CA3AF"
+                android:textSize="12sp"
+                android:layout_marginTop="4dp"/>
+        </LinearLayout>
+
+        <LinearLayout
+            android:id="@+id/navHistory"
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+            android:layout_weight="1"
+            android:orientation="vertical"
+            android:gravity="center"
+            android:background="?attr/selectableItemBackgroundBorderless">
+
+            <ImageView
+                android:layout_width="24dp"
+                android:layout_height="24dp"
+                android:src="@drawable/ic_history"
+                app:tint="#EF4444"/>
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="History"
+                android:textColor="#EF4444"
+                android:textSize="12sp"
+                android:fontFamily="sans-serif-medium"
+                android:layout_marginTop="4dp"/>
+        </LinearLayout>
+
+        <!-- Central SOS Button -->
+        <RelativeLayout
+            android:id="@+id/navSOS"
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+            android:layout_weight="1"
+            android:gravity="center">
+
+            <ImageView
+                android:layout_width="56dp"
+                android:layout_height="56dp"
+                android:src="@drawable/sos_fab_bg"
+                android:elevation="4dp"
+                android:layout_centerInParent="true"/>
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="SOS"
+                android:textColor="#FFFFFF"
+                android:textSize="14sp"
+                android:fontFamily="sans-serif-bold"
+                android:layout_centerInParent="true"/>
+        </RelativeLayout>
+
+        <LinearLayout
+            android:id="@+id/navContacts"
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+            android:layout_weight="1"
+            android:orientation="vertical"
+            android:gravity="center"
+            android:background="?attr/selectableItemBackgroundBorderless">
+
+            <ImageView
+                android:layout_width="24dp"
+                android:layout_height="24dp"
+                android:src="@drawable/ic_contacts"
+                app:tint="#9CA3AF"/>
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Contacts"
+                android:textColor="#9CA3AF"
+                android:textSize="12sp"
+                android:layout_marginTop="4dp"/>
+        </LinearLayout>
+
+        <LinearLayout
+            android:id="@+id/navSettings"
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+            android:layout_weight="1"
+            android:orientation="vertical"
+            android:gravity="center"
+            android:background="?attr/selectableItemBackgroundBorderless">
+
+            <ImageView
+                android:layout_width="24dp"
+                android:layout_height="24dp"
+                android:src="@drawable/ic_settings"
+                app:tint="#9CA3AF"/>
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Settings"
+                android:textColor="#9CA3AF"
+                android:textSize="12sp"
+                android:layout_marginTop="4dp"/>
+        </LinearLayout>
+    </LinearLayout>
+</RelativeLayout>
+
+
+app/res/layout/activity_home.xml:
+<?xml version="1.0" encoding="utf-8"?>
+<RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@color/light_home_background"
+    android:fillViewport="true">
+
+    <!-- Top Bar -->
+    <LinearLayout
+        android:id="@+id/topBar"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:padding="16dp"
+        android:gravity="center_vertical">
+
+        <!-- GPS Status -->
+        <ImageView
+            android:layout_width="20dp"
+            android:layout_height="20dp"
+            android:src="@drawable/ic_signal"
+            android:layout_marginEnd="8dp"/>
+
+        <TextView
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="GPS ACTIVE"
+            android:textStyle="bold"
+            android:textColor="@color/light_home_network"
+            android:textSize="14sp"
+            android:fontFamily="sans-serif-medium"
+            android:letterSpacing="0.05"/>
+
+        <!-- Ready Status -->
+        <LinearLayout
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:background="@drawable/ready_status_bg"
+            android:orientation="horizontal"
+            android:paddingStart="16dp"
+            android:paddingEnd="16dp"
+            android:paddingTop="8dp"
+            android:paddingBottom="8dp"
+            android:gravity="center"
+            android:layout_marginEnd="16dp">
+
+            <View
+                android:layout_width="8dp"
+                android:layout_height="8dp"
+                android:background="@drawable/green_dot"
+                android:layout_marginEnd="8dp"/>
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Ready"
+                android:textColor="@color/light_btnReady"
+                android:textSize="16sp"
+                android:fontFamily="sans-serif-medium"/>
+        </LinearLayout>
+
+        <!-- Settings Icon -->
+        <ImageView
+            android:id="@+id/settingsIcon"
+            android:layout_width="40dp"
+            android:layout_height="40dp"
+            android:src="@drawable/ic_settings"
+            android:background="@drawable/icon_bg"
+            android:padding="8dp"
+            />
+    </LinearLayout>
+
+    <!-- SOS Button with Glow Effect -->
+    <RelativeLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_below="@id/topBar"
+        android:layout_above="@id/shakeToggleCard"
+        android:gravity="center">
+
+        <!-- Shadow GlowLayer 1 -->
+        <View
+            android:layout_width="330dp"
+            android:layout_height="330dp"
+            android:alpha="0.5"
+            android:layout_centerInParent="true"
+            android:background="@drawable/glow_shadow"/>
+
+        <!-- Outer Glow Layer 1 -->
+        <View
+            android:layout_width="300dp"
+            android:layout_height="300dp"
+            android:alpha="0.5"
+            android:layout_centerInParent="true"
+            android:background="@drawable/glow_outer"/>
+
+        <!-- Middle Glow Layer 2 -->
+        <View
+            android:layout_width="270dp"
+            android:layout_height="270dp"
+            android:layout_centerInParent="true"
+            android:alpha="0.5"
+            android:background="@drawable/glow_middle"/>
+
+        <!-- SOS Button -->
+        <RelativeLayout
+            android:id="@+id/sosButton"
+            android:layout_width="250dp"
+            android:layout_height="250dp"
+            android:layout_centerInParent="true"
+            android:background="@drawable/sos_button_bg"
+            android:clickable="true"
+            android:focusable="true">
+
+            <LinearLayout
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_centerInParent="true"
+                android:orientation="vertical"
+                android:gravity="center">
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="SOS"
+                    android:textColor="@color/white"
+                    android:textSize="72sp"
+                    android:fontFamily="sans-serif-black"
+                    android:textStyle="bold"
+                    android:letterSpacing="0.1"/>
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="TAP TO SIGNAL"
+                    android:textColor="@color/white"
+                    android:textSize="16sp"
+                    android:fontFamily="sans-serif-medium"
+                    android:letterSpacing="0.15"
+                    android:layout_marginTop="8dp"/>
+            </LinearLayout>
+        </RelativeLayout>
+    </RelativeLayout>
+
+    <!-- Shake to Trigger Card -->
+    <androidx.cardview.widget.CardView
+        android:id="@+id/shakeToggleCard"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_above="@id/bottomSection"
+        android:layout_marginStart="24dp"
+        android:layout_marginEnd="24dp"
+        android:layout_marginBottom="32dp"
+        app:cardBackgroundColor="@color/white"
+        app:cardCornerRadius="24dp"
+        app:cardElevation="0dp"
+        android:layout_marginTop="10dp">
+
+        <RelativeLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:padding="16dp">
+
+            <androidx.constraintlayout.widget.ConstraintLayout
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_gravity="start">
+
+                <View
+                    android:id="@+id/red_circle"
+                    android:layout_width="64dp"
+                    android:layout_height="64dp"
+                    android:background="@drawable/icon_bg_light_red"
+                    app:layout_constraintStart_toStartOf="parent"
+                    app:layout_constraintTop_toTopOf="parent"
+                    app:layout_constraintEnd_toEndOf="parent"
+                    app:layout_constraintBottom_toBottomOf="parent"/>
+
+
+                <ImageView
+                    android:id="@+id/shakeIcon"
+                    android:layout_width="40dp"
+                    android:layout_height="40dp"
+                    android:src="@drawable/ic_shake"
+                    android:layout_centerVertical="true"
+                    app:layout_constraintStart_toStartOf="@id/red_circle"
+                    app:layout_constraintTop_toTopOf="@id/red_circle"
+                    app:layout_constraintEnd_toEndOf="@id/red_circle"
+                    app:layout_constraintBottom_toBottomOf="@id/red_circle"/>
+            </androidx.constraintlayout.widget.ConstraintLayout>
+
+
+
+            <LinearLayout
+                android:layout_width="190dp"
+                android:layout_height="wrap_content"
+                android:layout_toEndOf="@id/shakeIcon"
+                android:layout_toStartOf="@id/shakeToggle"
+                android:layout_centerVertical="true"
+                android:layout_marginStart="16dp"
+                android:orientation="vertical">
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="Shake to Trigger"
+                    android:textColor="@color/black"
+                    android:textStyle="bold"
+                    android:textSize="18sp"
+                    android:fontFamily="sans-serif-medium"/>
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="Sensitivity: Medium"
+                    android:textColor="@color/light_home_text"
+                    android:textSize="14sp"
+                    android:layout_marginTop="2dp"/>
+            </LinearLayout>
+
+            <androidx.appcompat.widget.SwitchCompat
+                android:id="@+id/shakeToggle"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_alignParentEnd="true"
+                android:layout_centerVertical="true"
+                android:checked="false"
+                android:theme="@style/SwitchTheme"/>
+        </RelativeLayout>
+    </androidx.cardview.widget.CardView>
+
+    <!-- Bottom Section -->
+    <LinearLayout
+        android:id="@+id/bottomSection"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_alignParentBottom="true"
+        android:orientation="vertical"
+        android:padding="24dp">
+
+        <!-- Contacts and History Cards -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:weightSum="2">
+
+            <!-- Contacts Card -->
+            <androidx.cardview.widget.CardView
+                android:id="@+id/contactsCard"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:layout_marginEnd="8dp"
+                app:cardBackgroundColor="@color/white"
+                app:cardCornerRadius="20dp"
+                app:cardElevation="0dp">
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical"
+                    android:padding="20dp"
+                    android:gravity="center_horizontal">
+
+                    <androidx.constraintlayout.widget.ConstraintLayout
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_gravity="start">
+
+                        <View
+                            android:id="@+id/circle"
+                            android:layout_width="64dp"
+                            android:layout_height="64dp"
+                            android:background="@drawable/icon_bg_light_blue"
+                            app:layout_constraintStart_toStartOf="parent"
+                            app:layout_constraintTop_toTopOf="parent"
+                            app:layout_constraintEnd_toEndOf="parent"
+                            app:layout_constraintBottom_toBottomOf="parent"/>
+
+
+                        <ImageView
+                            android:layout_width="40dp"
+                            android:layout_height="40dp"
+                            android:src="@drawable/ic_contacts"
+                            app:layout_constraintStart_toStartOf="@id/circle"
+                            app:layout_constraintTop_toTopOf="@id/circle"
+                            app:layout_constraintEnd_toEndOf="@id/circle"
+                            app:layout_constraintBottom_toBottomOf="@id/circle"
+                            />
+
+                    </androidx.constraintlayout.widget.ConstraintLayout>
+
+
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="Contacts"
+                        android:textColor="@color/black"
+                        android:textSize="18sp"
+                        android:fontFamily="sans-serif-medium"
+                        android:layout_marginTop="12dp"
+                        android:textStyle="bold"
+                        android:layout_gravity="start"/>
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="Manage trusted circle"
+                        android:textColor="@color/light_home_text"
+                        android:textSize="12sp"
+                        android:layout_marginTop="4dp"
+                        android:layout_gravity="start"/>
+                </LinearLayout>
+            </androidx.cardview.widget.CardView>
+
+            <!-- History Card -->
+            <androidx.cardview.widget.CardView
+                android:id="@+id/historyCard"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:layout_marginStart="8dp"
+                app:cardBackgroundColor="@color/white"
+                app:cardCornerRadius="20dp"
+                app:cardElevation="0dp">
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical"
+                    android:padding="20dp"
+                    android:gravity="center_horizontal">
+
+                    <androidx.constraintlayout.widget.ConstraintLayout
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_gravity="start">
+
+                        <View
+                            android:id="@+id/orange_circle"
+                            android:layout_width="64dp"
+                            android:layout_height="64dp"
+                            android:background="@drawable/icon_bg_light_orange"
+                            app:layout_constraintStart_toStartOf="parent"
+                            app:layout_constraintTop_toTopOf="parent"
+                            app:layout_constraintEnd_toEndOf="parent"
+                            app:layout_constraintBottom_toBottomOf="parent"/>
+
+
+                        <ImageView
+                            android:layout_width="40dp"
+                            android:layout_height="40dp"
+                            android:src="@drawable/ic_history"
+                            app:layout_constraintStart_toStartOf="@id/orange_circle"
+                            app:layout_constraintTop_toTopOf="@id/orange_circle"
+                            app:layout_constraintEnd_toEndOf="@id/orange_circle"
+                            app:layout_constraintBottom_toBottomOf="@id/orange_circle"
+                            />
+
+                    </androidx.constraintlayout.widget.ConstraintLayout>
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="History"
+                        android:textColor="@color/black"
+                        android:textSize="18sp"
+                        android:fontFamily="sans-serif-medium"
+                        android:layout_marginTop="12dp"
+                        android:textStyle="bold"
+                        android:layout_gravity="start"/>
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="Past alerts &amp; logs"
+                        android:textColor="@color/light_home_text"
+                        android:textSize="12sp"
+                        android:layout_marginTop="4dp"
+                        android:layout_gravity="start"/>
+                </LinearLayout>
+            </androidx.cardview.widget.CardView>
+        </LinearLayout>
+
+        <!-- Safety Guide Card -->
+        <androidx.cardview.widget.CardView
+            android:id="@+id/safetyGuideCard"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="16dp"
+            app:cardBackgroundColor="@color/white"
+            app:cardCornerRadius="20dp"
+            app:cardElevation="0dp">
+
+            <RelativeLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:padding="20dp">
+
+                <androidx.constraintlayout.widget.ConstraintLayout
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_gravity="start">
+
+                    <View
+                        android:id="@+id/safety_circle"
+                        android:layout_width="64dp"
+                        android:layout_height="64dp"
+                        android:background="@drawable/icon_bg_light_green"
+                        app:layout_constraintStart_toStartOf="parent"
+                        app:layout_constraintTop_toTopOf="parent"
+                        app:layout_constraintEnd_toEndOf="parent"
+                        app:layout_constraintBottom_toBottomOf="parent"/>
+
+
+                    <ImageView
+                        android:id="@+id/safetyIcon"
+                        android:layout_width="40dp"
+                        android:layout_height="40dp"
+                        android:src="@drawable/ic_safety"
+                        app:layout_constraintStart_toStartOf="@id/safety_circle"
+                        app:layout_constraintTop_toTopOf="@id/safety_circle"
+                        app:layout_constraintEnd_toEndOf="@id/safety_circle"
+                        app:layout_constraintBottom_toBottomOf="@id/safety_circle"
+                        />
+
+                </androidx.constraintlayout.widget.ConstraintLayout>
+
+
+                <LinearLayout
+                    android:layout_width="208dp"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="23dp"
+                    android:layout_marginEnd="-2dp"
+                    android:layout_marginTop="10dp"
+                    android:layout_toStartOf="@id/arrowIcon"
+                    android:layout_toEndOf="@id/safetyIcon"
+                    android:orientation="vertical">
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:fontFamily="sans-serif-medium"
+                        android:text="Safety Guide"
+                        android:textColor="@color/black"
+                        android:textSize="18sp"
+                        android:textStyle="bold" />
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="2dp"
+                        android:text="Emergency procedures"
+                        android:textColor="@color/light_home_text"
+                        android:textSize="12sp" />
+                </LinearLayout>
+
+                <ImageView
+                    android:id="@+id/arrowIcon"
+                    android:layout_width="24dp"
+                    android:layout_height="24dp"
+                    android:src="@drawable/ic_arrow_right"
+                    android:layout_alignParentEnd="true"
+                    android:layout_centerVertical="true" />
+            </RelativeLayout>
+        </androidx.cardview.widget.CardView>
+    </LinearLayout>
+</RelativeLayout>
+
+
+app/res/layout/activity_main.xml:
+<?xml version="1.0" encoding="utf-8"?>
+<androidx.constraintlayout.widget.ConstraintLayout
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="?attr/colorSurface">
+
+    <TextView
+        android:id="@+id/titleText"
+        android:text="LIFELINE"
+        android:textSize="26sp"
+        android:textStyle="bold"
+        android:textColor="?attr/colorOnSurface"
+        app:layout_constraintTop_toTopOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        android:layout_marginTop="48dp"
+        android:layout_marginStart="24dp"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"/>
+
+    <com.google.android.material.button.MaterialButton
+        android:id="@+id/btnStart"
+        android:layout_width="0dp"
+        android:layout_height="56dp"
+        android:text="Get Started"
+        android:textStyle="bold"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        android:layout_margin="24dp"/>
+</androidx.constraintlayout.widget.ConstraintLayout>
+
+
+app/res/layout/activity_safety_detail.xml:
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:orientation="vertical"
+    android:padding="24dp"
+    android:background="?attr/colorSurface"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent">
+
+    <TextView
+        android:id="@+id/tvTitle"
+        android:textSize="22sp"
+        android:textStyle="bold"
+        android:textColor="?attr/colorOnSurface"
+        android:layout_marginBottom="16dp"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"/>
+
+    <TextView
+        android:id="@+id/tvContent"
+        android:textSize="17sp"
+        android:textColor="?attr/colorOnSurfaceVariant"
+        android:lineSpacingExtra="10dp"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"/>
+</LinearLayout>
+
+
+app/res/layout/activity_safety_guide.xml:
+<?xml version="1.0" encoding="utf-8"?>
+<androidx.recyclerview.widget.RecyclerView
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/recyclerSafety"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="?attr/colorSurface"
+    android:padding="16dp"/>
+
+
+app/res/layout/activity_view_contacts.xml:
+<?xml version="1.0" encoding="utf-8"?>
+<RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@color/light_home_background"
+    android:fitsSystemWindows="true">
+
+    <!-- Top Bar -->
+    <RelativeLayout
+        android:id="@+id/topBar"
+        android:layout_width="match_parent"
+        android:layout_height="56dp"
+        android:elevation="2dp">
+
+        <ImageView
+            android:id="@+id/backButton"
+            android:layout_width="48dp"
+            android:layout_height="48dp"
+            android:layout_centerVertical="true"
+            android:layout_marginStart="8dp"
+            android:src="@drawable/ic_back"
+            android:padding="12dp"
+            android:background="?attr/selectableItemBackgroundBorderless" />
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_centerInParent="true"
+            android:text="Your Safety Circle"
+            android:textColor="@color/black"
+            android:textStyle="bold"
+            android:textSize="20sp"
+            android:fontFamily="sans-serif-medium"/>
+
+        <ImageView
+            android:id="@+id/settingsButton"
+            android:layout_width="48dp"
+            android:layout_height="48dp"
+            android:layout_alignParentEnd="true"
+            android:layout_centerVertical="true"
+            android:layout_marginEnd="8dp"
+            android:src="@drawable/ic_settings"
+            android:padding="12dp"
+            android:background="?attr/selectableItemBackgroundBorderless" />
+    </RelativeLayout>
+
+    <ScrollView
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:layout_below="@id/topBar"
+        android:layout_above="@id/addContactButton"
+        android:fillViewport="true">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical">
+
+            <!-- Subtitle -->
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Tap Alert to send immediate SOS"
+                android:textColor="@color/light_home_text"
+                android:textStyle="bold"
+                android:textSize="14sp"
+                android:layout_marginBottom="20dp"
+                android:gravity="center"
+                android:layout_gravity="center_horizontal"/>
+
+            <!-- Add to activity_view_contacts.xml inside ScrollView's LinearLayout -->
+            <TextView
+                android:id="@+id/tvEmptyContacts"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="No emergency contacts yet.\nTap 'Add Contact' to get started."
+                android:textColor="@color/light_home_text"
+                android:textSize="16sp"
+                android:gravity="center"
+                android:layout_gravity="center"
+                android:layout_marginTop="100dp"
+                android:visibility="gone"/>
+
+            <androidx.recyclerview.widget.RecyclerView
+                xmlns:android="http://schemas.android.com/apk/res/android"
+                android:id="@+id/recyclerContacts"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:background="@color/light_home_background"/>
+
+            <!-- Info Text -->
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Emergency contacts will be notified with your live\nlocation when you trigger an SOS alert."
+                android:textColor="@color/light_home_text"
+                android:textSize="14sp"
+                android:textStyle="bold"
+                android:layout_marginTop="24dp"
+                android:gravity="center"
+                android:layout_gravity="center_horizontal"/>
+        </LinearLayout>
+    </ScrollView>
+
+    <!-- Add Contact Button -->
+    <androidx.cardview.widget.CardView
+        android:id="@+id/addContactButton"
+        android:layout_width="190dp"
+        android:layout_height="wrap_content"
+        android:layout_alignParentBottom="true"
+        android:layout_alignParentEnd="true"
+        android:layout_margin="16dp"
+        android:layout_marginTop="16dp"
+        android:layout_marginBottom="18dp"
+        app:cardBackgroundColor="#F20D0D"
+        app:cardCornerRadius="50dp"
+        app:cardElevation="8dp">
+
+        <LinearLayout
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:gravity="center"
+            android:orientation="horizontal"
+            android:padding="20dp">
+
+            <ImageView
+                android:layout_width="28dp"
+                android:layout_height="28dp"
+                android:layout_marginEnd="12dp"
+                android:src="@drawable/ic_add"
+                app:tint="@color/white" />
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:fontFamily="sans-serif-bold"
+                android:text="Add Contact"
+                android:textStyle="bold"
+                android:textColor="@color/white"
+                android:textSize="18sp" />
+        </LinearLayout>
+    </androidx.cardview.widget.CardView>
+</RelativeLayout>
+
+
+app/res/layout/dialog_sos_countdown.xml:
+<com.google.android.material.card.MaterialCardView xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_margin="24dp"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    app:cardCornerRadius="24dp"
+    app:cardElevation="16dp">
+
+    <LinearLayout
+        android:padding="24dp"
+        android:gravity="center"
+        android:orientation="vertical"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content">
+
+        <TextView
+            android:id="@+id/tvCountdown"
+            android:text="5"
+            android:textSize="48sp"
+            android:textStyle="bold"
+            android:textColor="?attr/colorOnSurface"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"/>
+
+        <TextView
+            android:text="Sending SOS in..."
+            android:textColor="?attr/colorOnSurfaceVariant"
+            android:layout_marginTop="8dp"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"/>
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btnCancel"
+            android:layout_marginTop="24dp"
+            android:layout_width="match_parent"
+            android:layout_height="56dp"
+            android:text="Cancel"
+            app:cornerRadius="18dp"
+            android:textStyle="bold"/>
+    </LinearLayout>
+</com.google.android.material.card.MaterialCardView>
+
+
+app/res/layout/item_alert_history.xml:
+<androidx.cardview.widget.CardView
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    app:cardBackgroundColor="#FFFFFF"
+    android:layout_margin="5dp"
+    app:cardCornerRadius="40dp"
+    app:cardElevation="0dp"
+    app:strokeWidth="3dp"
+    app:strokeColor="@color/black"
+    android:layout_marginBottom="2dp">
+
+    <RelativeLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:padding="16dp">
+
+        <ImageView
+            android:id="@+id/sosIcon"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:src="@drawable/ic_bell"
+            android:background="@drawable/icon_bg_rec_red"
+            android:padding="12dp"/>
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_toEndOf="@id/sosIcon"
+            android:layout_toStartOf="@id/activeStatus"
+            android:layout_marginStart="16dp"
+            android:orientation="vertical">
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="SOS Alert Sent"
+                android:textColor="@color/black"
+                android:textSize="18sp"
+                android:textStyle="bold"
+                android:fontFamily="sans-serif-medium"/>
+
+            <TextView
+                android:id="@+id/tvDate"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:textStyle="bold"
+                android:textSize="14sp"
+                android:textColor="@color/light_home_text"
+                android:layout_marginTop="4dp"/>
+
+            <LinearLayout
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:layout_marginTop="8dp"
+                android:gravity="center_vertical">
+
+                <ImageView
+                    android:layout_width="16dp"
+                    android:layout_height="16dp"
+                    android:src="@drawable/ic_clock"
+                    app:tint="@color/alert_red"
+                    android:layout_marginEnd="6dp"/>
+
+                <TextView
+                    android:id="@+id/tvTime"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:textSize="14sp"
+                    android:textColor="@color/alert_red"
+                    android:fontFamily="sans-serif-medium"/>
+
+                <TextView
+                    android:id="@+id/tvDeliveryStatus"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text=" • Delivered"
+                    android:textColor="@color/alert_red"
+                    android:textSize="14sp"
+                    android:fontFamily="sans-serif-medium"/>
+            </LinearLayout>
+        </LinearLayout>
+
+        <TextView
+            android:id="@+id/activeStatus"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_alignParentEnd="true"
+            android:text="Active"
+            android:textColor="@color/alert_red"
+            android:textSize="14sp"
+            android:fontFamily="sans-serif-medium"
+            android:background="@drawable/active_badge_bg"
+            android:paddingStart="12dp"
+            android:paddingEnd="12dp"
+            android:paddingTop="6dp"
+            android:paddingBottom="6dp"/>
+
+        <View
+            android:id="@+id/verticalLine"
+            android:layout_width="2dp"
+            android:layout_height="240dp"
+            android:layout_marginTop="48dp"
+            android:background="#E5E7EB"
+            android:layout_marginStart="24dp"/>
+
+        <LinearLayout
+            android:id="@+id/locationSection"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:paddingRight="16dp"
+            android:paddingBottom="16dp"
+            android:layout_marginTop="100dp">
+
+            <RelativeLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content">
+
+                <ImageView
+                    android:id="@+id/locationIcon"
+                    android:layout_width="48dp"
+                    android:layout_height="48dp"
+                    android:src="@drawable/ic_location"
+                    android:background="@drawable/icon_bg_light_gray"
+                    android:padding="12dp"
+                    app:tint="#6B7280"/>
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_toEndOf="@id/locationIcon"
+                    android:layout_marginStart="16dp"
+                    android:orientation="vertical">
+
+                    <TextView
+                        android:id="@+id/tvLocationTitle"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="Location Shared"
+                        android:textStyle="bold"
+                        android:textColor="@color/black"
+                        android:textSize="18sp"
+                        android:fontFamily="sans-serif-medium"/>
+
+                    <TextView
+                        android:id="@+id/tvLocationSubtitle"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="Sent to Emergency Contacts"
+                        android:textColor="@color/light_home_text"
+                        android:textSize="14sp"
+                        android:layout_marginTop="4dp"/>
+                </LinearLayout>
+            </RelativeLayout>
+
+            <!-- Map Preview (shown when successful) -->
+            <com.google.android.material.imageview.ShapeableImageView
+                android:id="@+id/mapPreview"
+                android:layout_width="wrap_content"
+                android:layout_height="120dp"
+                android:src="@drawable/map_preview_img"
+                android:scaleType="centerCrop"
+                android:layout_marginTop="12dp"
+                android:layout_marginStart="56dp"
+                app:shapeAppearanceOverlay="@style/RoundedCorner32"
+                app:strokeColor="@color/light_home_text"
+                app:strokeWidth="2dp"/>
+
+            <!-- Error Card (shown when failed) -->
+            <androidx.cardview.widget.CardView
+                android:id="@+id/errorCard"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="12dp"
+                android:layout_marginStart="56dp"
+                app:cardBackgroundColor="#FEE2E2"
+                app:cardCornerRadius="16dp"
+                app:cardElevation="0dp"
+                android:visibility="gone">
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical"
+                    android:padding="16dp"
+                    android:gravity="center">
+
+                    <ImageView
+                        android:layout_width="48dp"
+                        android:layout_height="48dp"
+                        android:src="@drawable/ic_bell"
+                        app:tint="#DC2626"
+                        android:layout_marginBottom="8dp"/>
+
+                    <TextView
+                        android:id="@+id/tvErrorMessage"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="No emergency contacts found"
+                        android:textColor="#DC2626"
+                        android:textSize="14sp"
+                        android:textStyle="bold"
+                        android:fontFamily="sans-serif-medium"
+                        android:gravity="center"/>
+                </LinearLayout>
+            </androidx.cardview.widget.CardView>
+        </LinearLayout>
+
+        <TextView
+            android:id="@+id/tvLocation"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:textColor="@color/primary"
+            android:textSize="13sp"
+            android:visibility="gone"
+            android:layout_marginTop="6dp"/>
+    </RelativeLayout>
+</androidx.cardview.widget.CardView>
+
+
+app/res/layout/item_contact.xml:
+<?xml version="1.0" encoding="utf-8"?>
+<com.google.android.material.card.MaterialCardView
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:layout_marginStart="10dp"
+    android:layout_marginEnd="10dp"
+    android:layout_marginTop="8dp"
+    android:layout_marginBottom="12dp"
+    app:cardElevation="8dp"
+    app:strokeWidth="1dp"
+    app:strokeColor="@color/light_home_network"
+    app:cardBackgroundColor="@color/white"
+    app:cardCornerRadius="50dp">
+
+    <RelativeLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:padding="16dp">
+        <androidx.constraintlayout.widget.ConstraintLayout
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content">
+            <View
+                android:id="@+id/purple_circle"
+                android:layout_width="64dp"
+                android:layout_height="64dp"
+                android:background="@drawable/icon_bg_light_purple"
+                app:layout_constraintStart_toStartOf="parent"
+                app:layout_constraintTop_toTopOf="parent"
+                app:layout_constraintEnd_toEndOf="parent"
+                app:layout_constraintBottom_toBottomOf="parent"/>
+            <!-- Profile Image -->
+            <de.hdodenhof.circleimageview.CircleImageView
+                android:id="@+id/profileImage1"
+                android:layout_width="56dp"
+                android:layout_height="56dp"
+                android:src="@drawable/profile"
+                app:layout_constraintStart_toStartOf="@id/purple_circle"
+                app:layout_constraintTop_toTopOf="@id/purple_circle"
+                app:layout_constraintEnd_toEndOf="@id/purple_circle"
+                app:layout_constraintBottom_toBottomOf="@id/purple_circle"
+                android:layout_centerVertical="true"/>
+        </androidx.constraintlayout.widget.ConstraintLayout>
+        <LinearLayout
+            android:layout_width="180dp"
+            android:layout_height="wrap_content"
+            android:layout_centerVertical="true"
+            android:layout_marginStart="80dp"
+            android:layout_toStartOf="@id/actionButtons1"
+            android:layout_toEndOf="@id/profileImage1"
+            android:orientation="vertical">
+            <TextView
+                android:id="@+id/tvName"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:textSize="18sp"
+                android:textStyle="bold"
+                android:fontFamily="sans-serif-medium"
+                android:textColor="@color/black" />
+            <TextView
+                android:id="@+id/tvPhone"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="4dp"
+                android:textSize="14sp"
+                android:textColor="@color/light_home_text"/>
+        </LinearLayout>
+        <LinearLayout
+            android:id="@+id/actionButtons1"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_alignParentEnd="true"
+            android:layout_centerVertical="true"
+            android:orientation="horizontal">
+            <ImageView
+                android:id="@+id/btnDelete"
+                android:layout_width="48dp"
+                android:layout_height="48dp"
+                android:padding="8dp"
+                android:src="@drawable/ic_delete"
+                android:background="@drawable/alert_button_bg"
+                android:contentDescription="Delete contact"
+                app:tint="#1B0C0C"
+                android:layout_marginEnd="8dp"/>
+<!--            <ImageView-->
+<!--                android:id="@+id/alertButton1"-->
+<!--                android:layout_width="48dp"-->
+<!--                android:layout_height="48dp"-->
+<!--                android:padding="8dp"-->
+<!--                android:src="@drawable/ic_delete"-->
+<!--                android:background="@drawable/icon_button_bg"-->
+<!--                app:tint="@color/black"-->
+<!--            android:contentDescription="Delete contact"-->
+<!--                android:layout_marginEnd="8dp"/>-->
+        </LinearLayout>
+    </RelativeLayout>
+</com.google.android.material.card.MaterialCardView>
+
+
+app/res/layout/item_safety_category.xml:
+<?xml version="1.0" encoding="utf-8"?>
+<com.google.android.material.card.MaterialCardView xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_margin="8dp"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    app:cardCornerRadius="14dp"
+    app:cardElevation="6dp">
+
+    <TextView
+        android:id="@+id/tvCategory"
+        android:padding="24dp"
+        android:textSize="18sp"
+        android:textStyle="bold"
+        android:textColor="?attr/colorOnSurface"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"/>
+</com.google.android.material.card.MaterialCardView>
+
+
+app/values/colors/colors.xml:
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Primary Colors -->
+    <color name="primary_red">#EF4444</color>
+    <color name="primary_red_dark">#DC2626</color>
+    <color name="primary_red_light">#FEE2E2</color>
+
+    <!-- Background Colors -->
+    <color name="background_black">#000000</color>
+    <color name="background_dark_gray">#1F1F1F</color>
+    <color name="background_light_gray">#F8F5F5</color>
+    <color name="background_white">#FFFFFF</color>
+
+    <!-- Text Colors -->
+    <color name="text_primary">#000000</color>
+    <color name="text_secondary">#6B7280</color>
+    <color name="text_tertiary">#9CA3AF</color>
+    <color name="text_white">#FFFFFF</color>
+
+    <!-- Status Colors -->
+    <color name="status_green">#10B981</color>
+    <color name="status_green_light">#D1FAE5</color>
+    <color name="status_orange">#F59E0B</color>
+    <color name="status_orange_light">#FFEDD5</color>
+    <color name="status_blue">#3B82F6</color>
+    <color name="status_blue_light">#DBEAFE</color>
+    <color name="status_purple">#8B5CF6</color>
+    <color name="status_purple_light">#EDE9FE</color>
+
+    <!-- Border Colors -->
+    <color name="border_light">#E5E7EB</color>
+    <color name="border_medium">#D1D5DB</color>
+
+    <!-- Glow Colors -->
+    <color name="glow_red_outer">#33FF0000</color>
+    <color name="glow_red_middle">#55FF0000</color>
+
+    <!-- Button Colors -->
+    <color name="button_bg_light">#F3F4F6</color>
+
+    <color name="black">#000000</color>
+    <color name="white">#FFFFFF</color>
+    <color name="light_sos_button">#FB3737</color>
+    <color name="light_home_background">#F8F5F5</color>
+    <color name="light_home_shakeToggle">#F20C0C</color>
+    <color name="light_home_text">#8692A4</color>
+    <color name="light_sos_middleGlow">#F7A3A3</color>
+    <color name="light_sos_outerGlow">#F8CACA</color>
+    <color name="light_sos_shadowGlow">#FBE9E9</color>
+    <color name="light_home_network">#A6ABB8</color>
+    <color name="light_btnReady">#10B981</color>
+    <color name="add_contact_divider">#E5E7EB</color>
+    <color name="alert_red">#F20D0D</color>
+
+    <color name="primary">#111111</color>
+</resources>
+
+
+app/values/colors/colors.xml(night):
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="bg">#000000</color>
+    <color name="card">#1C1C1E</color>
+
+    <color name="red">#FF3B30</color>
+    <color name="red_dark">#B00020</color>
+
+    <color name="green">#30D158</color>
+    <color name="text_primary">#FFFFFF</color>
+    <color name="text_secondary">#A1A1A1</color>
+
+    <color name="chip_selected">#FF3B30</color>
+    <color name="chip_unselected">#2A2A2C</color>
+</resources>
+
+
+app/values/themes/themes.xml:
+<resources xmlns:tools="http://schemas.android.com/tools">
+    <!-- Base application theme. -->
+    <style name="Base.Theme.LIFELINE" parent="Theme.Material3.DayNight.NoActionBar">
+        <!-- Customize your light theme here. -->
+        <!-- <item name="colorPrimary">@color/my_light_primary</item> -->
+    </style>
+
+    <!-- Base Application Theme -->
+    <style name="AppTheme" parent="Theme.MaterialComponents.Light.NoActionBar">
+        <item name="colorPrimary">@color/primary_red</item>
+        <item name="colorPrimaryDark">@color/primary_red_dark</item>
+        <item name="colorAccent">@color/primary_red</item>
+        <item name="android:statusBarColor">@color/background_black</item>
+        <item name="android:windowLightStatusBar">false</item>
+    </style>
+
+    <!-- Dark Theme for Main Activity -->
+    <style name="AppTheme.Dark" parent="AppTheme">
+        <item name="android:windowBackground">@color/background_black</item>
+        <item name="android:statusBarColor">@color/background_black</item>
+        <item name="android:navigationBarColor">@color/background_black</item>
+    </style>
+
+    <!-- Light Theme for Other Activities -->
+    <style name="AppTheme.Light" parent="AppTheme">
+        <item name="android:windowBackground">@color/background_light_gray</item>
+        <item name="android:statusBarColor">@color/background_white</item>
+        <item name="android:windowLightStatusBar">true</item>
+        <item name="android:navigationBarColor">@color/background_white</item>
+    </style>
+
+    <!-- Switch Theme -->
+    <style name="SwitchTheme" parent="Theme.MaterialComponents.Light">
+        <item name="colorControlActivated">@color/primary_red</item>
+        <item name="colorSwitchThumbNormal">@color/white</item>
+        <item name="android:colorForeground">@color/text_tertiary</item>
+    </style>
+
+    <!-- Card Style -->
+    <style name="CardStyle">
+        <item name="cardBackgroundColor">@color/background_dark_gray</item>
+        <item name="cardCornerRadius">20dp</item>
+        <item name="cardElevation">0dp</item>
+    </style>
+
+    <!-- Button Styles -->
+    <style name="PrimaryButtonStyle">
+        <item name="android:background">@drawable/primary_button_bg</item>
+        <item name="android:textColor">@color/text_white</item>
+        <item name="android:textSize">18sp</item>
+        <item name="android:fontFamily">sans-serif-bold</item>
+        <item name="android:padding">16dp</item>
+    </style>
+
+    <!-- Text Styles -->
+    <style name="HeaderTextStyle">
+        <item name="android:textColor">@color/text_primary</item>
+        <item name="android:textSize">24sp</item>
+        <item name="android:fontFamily">sans-serif-bold</item>
+    </style>
+
+    <style name="TitleTextStyle">
+        <item name="android:textColor">@color/text_primary</item>
+        <item name="android:textSize">20sp</item>
+        <item name="android:fontFamily">sans-serif-medium</item>
+    </style>
+
+    <style name="SubtitleTextStyle">
+        <item name="android:textColor">@color/text_secondary</item>
+        <item name="android:textSize">16sp</item>
+        <item name="android:fontFamily">sans-serif</item>
+    </style>
+
+    <style name="BodyTextStyle">
+        <item name="android:textColor">@color/text_secondary</item>
+        <item name="android:textSize">14sp</item>
+        <item name="android:fontFamily">sans-serif</item>
+    </style>
+
+    <style name="CaptionTextStyle">
+        <item name="android:textColor">@color/text_tertiary</item>
+        <item name="android:textSize">12sp</item>
+        <item name="android:fontFamily">sans-serif</item>
+    </style>
+
+    <style name="Theme.LIFELINE" parent="Base.Theme.LIFELINE" />
+</resources>
+
+
+app/values/themes/night/themes.xml:
+<resources xmlns:tools="http://schemas.android.com/tools">
+    <!-- Base application theme. -->
+    <style name="Base.Theme.LIFELINE" parent="Theme.Material3.DayNight.NoActionBar">
+        <!-- Customize your dark theme here. -->
+        <!-- <item name="colorPrimary">@color/my_dark_primary</item> -->
+    </style>
+</resources>
+
+
+app/values/strings.xml:
+<resources>
+    <string name="app_name">LIFELINE</string>
+</resources>
+
+
+app/values/styles.xml:
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <style name="PrimaryButton" parent="Widget.Material3.Button">
+        <item name="cornerRadius">22dp</item>
+        <item name="android:layout_height">56dp</item>
+        <item name="android:layout_marginTop">14dp</item>
+        <item name="backgroundTint">@color/primary</item>
+        <item name="android:textColor">@color/white</item>
+        <item name="android:textStyle">bold</item>
+    </style>
+    <style name="RoundedCorner32">
+        <item name="cornerFamily">rounded</item>
+        <item name="cornerSize">32dp</item>
+    </style>
+</resources>
+
+
+Gradle Scripts/build.gradle.kts (Module :app):
+plugins {
+    alias(libs.plugins.android.application)
+}
+
+android {
+    namespace = "com.lifeline.safety"
+    compileSdk {
+        version = release(36)
+    }
+
+    defaultConfig {
+        applicationId = "com.lifeline.safety"
+        minSdk = 28
+        targetSdk = 36
+        versionCode = 1
+        versionName = "1.0"
+
+        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+    }
+
+    buildTypes {
+        release {
+            isMinifyEnabled = false
+            proguardFiles(
+                getDefaultProguardFile("proguard-android-optimize.txt"),
+                "proguard-rules.pro"
+            )
+        }
+    }
+    compileOptions {
+        sourceCompatibility = JavaVersion.VERSION_11
+        targetCompatibility = JavaVersion.VERSION_11
+    }
+}
+
+dependencies {
+    implementation(libs.appcompat)
+    implementation(libs.material)
+    implementation(libs.activity)
+    implementation(libs.constraintlayout)
+    implementation("de.hdodenhof:circleimageview:3.1.0")
+    implementation("com.google.android.gms:play-services-location:21.3.0")
+    testImplementation(libs.junit)
+    androidTestImplementation(libs.ext.junit)
+    androidTestImplementation(libs.espresso.core)
+}

@@ -1,0 +1,87 @@
+<resources xmlns:tools="http://schemas.android.com/tools">
+    <!-- Base application theme. -->
+    <style name="Base.Theme.LIFELINE" parent="Theme.Material3.DayNight.NoActionBar">
+        <!-- Customize your light theme here. -->
+        <!-- <item name="colorPrimary">@color/my_light_primary</item> -->
+    </style>
+
+    <!-- Base Application Theme -->
+    <style name="AppTheme" parent="Theme.MaterialComponents.Light.NoActionBar">
+        <item name="colorPrimary">@color/primary_red</item>
+        <item name="colorPrimaryDark">@color/primary_red_dark</item>
+        <item name="colorAccent">@color/primary_red</item>
+        <item name="android:statusBarColor">@color/background_black</item>
+        <item name="android:windowLightStatusBar">false</item>
+    </style>
+
+    <!-- Dark Theme for Main Activity -->
+    <style name="AppTheme.Dark" parent="AppTheme">
+        <item name="android:windowBackground">@color/background_black</item>
+        <item name="android:statusBarColor">@color/background_black</item>
+        <item name="android:navigationBarColor">@color/background_black</item>
+    </style>
+
+    <!-- Light Theme for Other Activities -->
+    <style name="AppTheme.Light" parent="AppTheme">
+        <item name="android:windowBackground">@color/background_light_gray</item>
+        <item name="android:statusBarColor">@color/background_white</item>
+        <item name="android:windowLightStatusBar">true</item>
+        <item name="android:navigationBarColor">@color/background_white</item>
+    </style>
+
+    <!-- Switch Theme -->
+    <style name="SwitchTheme" parent="Theme.MaterialComponents.Light">
+        <item name="colorControlActivated">@color/primary_red</item>
+        <item name="colorSwitchThumbNormal">@color/white</item>
+        <item name="android:colorForeground">@color/text_tertiary</item>
+    </style>
+
+    <!-- Card Style -->
+    <style name="CardStyle">
+        <item name="cardBackgroundColor">@color/background_dark_gray</item>
+        <item name="cardCornerRadius">20dp</item>
+        <item name="cardElevation">0dp</item>
+    </style>
+
+    <!-- Button Styles -->
+    <style name="PrimaryButtonStyle">
+        <item name="android:background">@drawable/primary_button_bg</item>
+        <item name="android:textColor">@color/text_white</item>
+        <item name="android:textSize">18sp</item>
+        <item name="android:fontFamily">sans-serif-bold</item>
+        <item name="android:padding">16dp</item>
+    </style>
+
+    <!-- Text Styles -->
+    <style name="HeaderTextStyle">
+        <item name="android:textColor">@color/text_primary</item>
+        <item name="android:textSize">24sp</item>
+        <item name="android:fontFamily">sans-serif-bold</item>
+    </style>
+
+    <style name="TitleTextStyle">
+        <item name="android:textColor">@color/text_primary</item>
+        <item name="android:textSize">20sp</item>
+        <item name="android:fontFamily">sans-serif-medium</item>
+    </style>
+
+    <style name="SubtitleTextStyle">
+        <item name="android:textColor">@color/text_secondary</item>
+        <item name="android:textSize">16sp</item>
+        <item name="android:fontFamily">sans-serif</item>
+    </style>
+
+    <style name="BodyTextStyle">
+        <item name="android:textColor">@color/text_secondary</item>
+        <item name="android:textSize">14sp</item>
+        <item name="android:fontFamily">sans-serif</item>
+    </style>
+
+    <style name="CaptionTextStyle">
+        <item name="android:textColor">@color/text_tertiary</item>
+        <item name="android:textSize">12sp</item>
+        <item name="android:fontFamily">sans-serif</item>
+    </style>
+
+    <style name="Theme.LIFELINE" parent="Base.Theme.LIFELINE" />
+</resources>

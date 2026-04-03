@@ -1,0 +1,103 @@
+<?xml version="1.0" encoding="utf-8"?>
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@android:color/transparent">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:orientation="vertical"
+        android:gravity="center"
+        android:padding="12dp">
+
+        <!-- Card Container -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:orientation="vertical"
+            android:gravity="center"
+            android:background="@drawable/dialog_bg_rounded"
+            android:padding="4dp">
+
+            <!-- Close Button -->
+            <ImageView
+                android:id="@+id/btnClose"
+                android:layout_width="48dp"
+                android:layout_height="48dp"
+                android:src="@drawable/ic_close"
+                android:padding="12dp"
+                android:background="?attr/selectableItemBackgroundBorderless"
+                android:layout_gravity="end"
+                android:layout_marginBottom="32dp"
+                app:tint="#FFFFFF"/>
+
+            <!-- Circular Progress Container -->
+            <RelativeLayout
+                android:layout_width="340dp"
+                android:layout_height="340dp"
+                android:gravity="center"
+                android:layout_marginBottom="48dp">
+
+                <!-- Custom Circular Progress View -->
+                <com.lifeline.safety.views.CircularProgressView
+                    android:id="@+id/circularProgress"
+                    android:layout_width="match_parent"
+                    android:layout_height="match_parent"
+                    app:progressColor="#FF0000"
+                    app:backgroundColor="#33FF0000" />
+
+                <!-- Countdown Number -->
+                <TextView
+                    android:id="@+id/tvCountdown"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_centerInParent="true"
+                    android:text="5"
+                    android:textSize="120sp"
+                    android:textColor="#FFFFFF"
+                    android:textStyle="bold"
+                    android:layout_marginTop="-15dp" />
+
+                <!-- Sending Signal Text -->
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_below="@id/tvCountdown"
+                    android:layout_centerHorizontal="true"
+                    android:layout_marginTop="8dp"
+                    android:text="SENDING SIGNAL..."
+                    android:textColor="#FFFFFF"
+                    android:textSize="16sp"
+                    android:letterSpacing="0.15"
+                    android:fontFamily="sans-serif-medium"/>
+            </RelativeLayout>
+
+            <!-- Cancel Button -->
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/btnCancel"
+                android:layout_width="280dp"
+                android:layout_height="60dp"
+                android:layout_gravity="center_horizontal"
+                android:text="CANCEL"
+                android:textSize="18sp"
+                android:textStyle="bold"
+                android:textColor="#000000"
+                android:backgroundTint="#FFFFFF"
+                android:layout_marginBottom="32dp"
+                app:cornerRadius="30dp" />
+
+            <!-- Bottom Text -->
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Your location will be sent to\nemergency contacts in 5 seconds."
+                android:textColor="#B3FFFFFF"
+                android:textSize="14sp"
+                android:gravity="center"
+                android:lineSpacingExtra="4dp"
+                android:fontFamily="sans-serif"/>
+        </LinearLayout>
+    </LinearLayout>
+</FrameLayout>

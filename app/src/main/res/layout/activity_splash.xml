@@ -1,0 +1,127 @@
+<?xml version="1.0" encoding="utf-8"?>
+<androidx.constraintlayout.widget.ConstraintLayout
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@drawable/splash_gradient">
+
+    <View
+        android:id="@+id/glowCircle"
+        android:layout_width="280dp"
+        android:layout_height="280dp"
+        android:background="@drawable/glow_circle"
+        android:alpha="0.45"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintTop_toTopOf="parent"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintVertical_bias="0.35"/>
+
+    <androidx.cardview.widget.CardView
+        android:id="@+id/cardLogo"
+        android:layout_width="180dp"
+        android:layout_height="180dp"
+        app:cardCornerRadius="48dp"
+        app:cardElevation="24dp"
+        app:cardBackgroundColor="@android:color/transparent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintTop_toTopOf="parent"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintVertical_bias="0.35">
+
+        <ImageView
+            android:id="@+id/imgLogo"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:src="@drawable/ic_heart_logo"
+            android:scaleType="fitXY"
+            android:contentDescription="Lifeline Heart Logo"/>
+
+    </androidx.cardview.widget.CardView>
+
+    <TextView
+        android:id="@+id/tvAppName"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="LIFELINE"
+        android:textSize="42sp"
+        android:textStyle="bold"
+        android:textColor="#232323"
+        android:letterSpacing="0.12"
+        android:fontFamily="sans-serif-black"
+        android:alpha="1"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintTop_toBottomOf="@id/cardLogo"
+        android:layout_marginTop="36dp"/>
+
+    <TextView
+        android:id="@+id/tvTagline"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Your safety, our priority."
+        android:textSize="18sp"
+        android:textColor="#6B4F4F"
+        android:fontFamily="sans-serif-medium"
+        android:letterSpacing="0.03"
+        android:alpha="1"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintTop_toBottomOf="@id/tvAppName"
+        android:layout_marginTop="10dp"/>
+
+    <LinearLayout
+        android:id="@+id/dotsLayout"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="center"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintBottom_toTopOf="@id/tvBadge"
+        android:layout_marginBottom="24dp">
+
+        <View
+            android:id="@+id/dotLeft"
+            android:layout_width="8dp"
+            android:layout_height="8dp"
+            android:background="@drawable/dot_inactive"
+            android:alpha="0"
+            android:layout_marginEnd="8dp"/>
+
+        <View
+            android:id="@+id/dotCenter"
+            android:layout_width="28dp"
+            android:layout_height="8dp"
+            android:background="@drawable/dot_active"
+            android:alpha="0"
+            android:layout_marginEnd="8dp"
+            android:scaleX="1"/>
+
+        <View
+            android:id="@+id/dotRight"
+            android:layout_width="8dp"
+            android:layout_height="8dp"
+            android:background="@drawable/dot_inactive"
+            android:alpha="0"/>
+
+    </LinearLayout>
+
+    <TextView
+        android:id="@+id/tvBadge"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="PREMIUM PROTECTION"
+        android:textSize="13sp"
+        android:textColor="#8A8A8A"
+        android:textStyle="bold"
+        android:letterSpacing="0.22"
+        android:alpha="0"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintBottom_toBottomOf="parent"
+        android:layout_marginBottom="48dp"/>
+
+</androidx.constraintlayout.widget.ConstraintLayout>

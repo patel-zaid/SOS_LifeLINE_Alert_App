@@ -1,0 +1,59 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Primary Colors -->
+    <color name="primary_red">#EF4444</color>
+    <color name="primary_red_dark">#DC2626</color>
+    <color name="primary_red_light">#FEE2E2</color>
+
+    <!-- Background Colors -->
+    <color name="background_black">#000000</color>
+    <color name="background_dark_gray">#1F1F1F</color>
+    <color name="background_light_gray">#F8F5F5</color>
+    <color name="background_white">#FFFFFF</color>
+
+    <!-- Text Colors -->
+    <color name="text_primary">#000000</color>
+    <color name="text_secondary">#6B7280</color>
+    <color name="text_tertiary">#9CA3AF</color>
+    <color name="text_white">#FFFFFF</color>
+
+    <!-- Status Colors -->
+    <color name="status_green">#10B981</color>
+    <color name="status_green_light">#D1FAE5</color>
+    <color name="status_orange">#F59E0B</color>
+    <color name="status_orange_light">#FFEDD5</color>
+    <color name="status_blue">#3B82F6</color>
+    <color name="status_blue_light">#DBEAFE</color>
+    <color name="status_purple">#8B5CF6</color>
+    <color name="status_purple_light">#EDE9FE</color>
+
+    <!-- Border Colors -->
+    <color name="border_light">#E5E7EB</color>
+    <color name="border_medium">#D1D5DB</color>
+
+    <!-- Glow Colors -->
+    <color name="glow_red_outer">#33FF0000</color>
+    <color name="glow_red_middle">#55FF0000</color>
+
+    <!-- Button Colors -->
+    <color name="button_bg_light">#F3F4F6</color>
+
+    <color name="black">#000000</color>
+    <color name="white">#FFFFFF</color>
+    <color name="light_sos_button">#FB3737</color>
+    <color name="light_home_background">#F8F5F5</color>
+    <color name="light_home_shakeToggle">#F20C0C</color>
+    <color name="light_home_text">#8692A4</color>
+    <color name="light_sos_middleGlow">#F7A3A3</color>
+    <color name="light_sos_outerGlow">#F8CACA</color>
+    <color name="light_sos_shadowGlow">#FBE9E9</color>
+    <color name="light_home_network">#A6ABB8</color>
+    <color name="light_btnReady">#265C4A</color>
+    <color name="add_contact_divider">#E5E7EB</color>
+    <color name="alert_red">#F20D0D</color>
+    <color name="emer_green">#059669</color>
+    <color name="safety_blue">#2665EB</color>
+
+
+    <color name="primary">#111111</color>
+</resources>
