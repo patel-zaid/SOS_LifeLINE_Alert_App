@@ -24,7 +24,7 @@
 
 | Add Contact | Safety Guide | Alert History | Settings |
 |:---:|:---:|:---:|:---:|
-| ![](images/add_contact.jpg) | ![](images/guide.jpg) | ![](images/history.jpg) | ![](images/settings.jpg) |
+| ![](images/add_contacts.jpg) | ![](images/guide.jpg) | ![](images/history.jpg) | ![](images/settings.jpg) |
 
 
 ---
