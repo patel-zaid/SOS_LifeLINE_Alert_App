@@ -18,9 +18,13 @@
 
 ## 📱 Screenshots
 
-| Splash Screen | Home / SOS | Safety Circle | Add Contact |
+| Splash Screen | Home / SOS | SOS Countdown | Safety Circle |
 |:---:|:---:|:---:|:---:|
-| *(splash)* | *(home)* | *(contacts)* | *(add contact)* |
+| ![](images/splash.jpg) | ![](images/home.jpg) | ![](images/countdown.jpg) | ![](images/contacts.jpg) |
+
+| Add Contact | Safety Guide | Alert History | Settings |
+|:---:|:---:|:---:|:---:|
+| ![](images/add_contact.jpg) | ![](images/guide.jpg) | ![](images/history.jpg) | ![](images/settings.jpg) |
 
 
 ---
