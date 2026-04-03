@@ -22,7 +22,6 @@
 |:---:|:---:|:---:|:---:|
 | *(splash)* | *(home)* | *(contacts)* | *(add contact)* |
 
-> Replace the above placeholders with actual screenshots from your device.
 
 ---
 
